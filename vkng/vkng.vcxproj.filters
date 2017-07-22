@@ -27,6 +27,9 @@
     <ClCompile Include="swap_chain.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="pipeline.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="cmmn.h">
@@ -44,5 +47,12 @@
     <ClInclude Include="swap_chain.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="pipeline.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <CustomBuild Include="shader.vert" />
+    <CustomBuild Include="shader.frag" />
   </ItemGroup>
 </Project>

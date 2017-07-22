@@ -32,19 +32,19 @@ namespace vkng {
 		struct options {
 			vk::PipelineVertexInputStateCreateInfo vi;
 			vk::PipelineInputAssemblyStateCreateInfo ia;
-			vk::Viewport viewport;
+			vk::Viewport viewport_;
 			vk::Rect2D scissor;
 			vk::PipelineRasterizationStateCreateInfo rs;
 			vk::PipelineMultisampleStateCreateInfo multisample_ifo;
 			vector<vk::PipelineColorBlendAttachmentState> blend_states;
-			vk::PipelineColorBlendStateCreateInfo blend;
+			vk::PipelineColorBlendStateCreateInfo blend_;
 			vector<vk::DynamicState> dynamic_states_;
 			vector<vk::PipelineShaderStageCreateInfo> shaders;
 
 			options() {}
 
 			options& viewport(vec2 viewport_size) {
-				viewport = vk::Viewport(0.f, 0.f, viewport_size.x, viewport_size.y, 0.f, 1.f);
+				viewport_ = vk::Viewport(0.f, 0.f, viewport_size.x, viewport_size.y, 0.f, 1.f);
 				scissor = vk::Rect2D(vk::Offset2D(), vk::Extent2D(viewport_size.x, viewport_size.y));
 			}
 			options& input_assembly(vk::PrimitiveTopology topology, bool prim_restart = false) {
@@ -52,7 +52,11 @@ namespace vkng {
 				ia.primitiveRestartEnable = prim_restart;
 				return *this;
 			}
-			options& viewport(vk::Viewport vp) { viewport = vp; return *this; }
+			options& viewport(vk::Viewport vp) {
+				viewport_ = vp;
+				scissor = vk::Rect2D(vk::Offset2D(), vk::Extent2D(vp.width, vp.height));
+				return *this;
+			}
 			options& rasterizer(vk::PolygonMode poly_mode = vk::PolygonMode::eFill,
 					vk::CullModeFlags cull_mode = vk::CullModeFlags(vk::CullModeFlagBits::eBack), vk::FrontFace ff = vk::FrontFace::eClockwise) {
 				rs.polygonMode = poly_mode;
@@ -62,10 +66,10 @@ namespace vkng {
 			}
 			options& rasterizer(vk::PipelineRasterizationStateCreateInfo ifo) { rs = ifo; return *this; }
 			options& blend(vk::PipelineColorBlendStateCreateInfo ifo, vector<vk::PipelineColorBlendAttachmentState> states) {
-				blend = ifo;
+				blend_ = ifo;
 				blend_states = states;
-				blend.attachmentCount = blend_states.size();
-				blend.pAttachments = blend_states.data();
+				blend_.attachmentCount = blend_states.size();
+				blend_.pAttachments = blend_states.data();
 				return *this;
 			}
 			options& dynamic_states(vector<vk::DynamicState> states) {
@@ -88,7 +92,7 @@ namespace vkng {
 		vk::UniquePipeline pp;
 		pipeline(device* d, vk::PipelineLayout layout, vk::RenderPass renderpass, uint32_t subpass, 
 			options b, 
-			vk::Pipeline basepipe = VK_NULL_HANDLE, uint32_t baseindex = 0);
+			vk::Pipeline basepipe = VK_NULL_HANDLE, int32_t baseindex = 0);
 		~pipeline();
 	};
 }

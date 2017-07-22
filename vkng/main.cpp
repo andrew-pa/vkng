@@ -12,7 +12,6 @@ using namespace vkng;
 struct test_app : public app {
 	device dev;
 	swap_chain swch;
-	pipeline basicp;
 	test_app() : 
 		app("Vulkan Engine", vec2(1280, 960)),
 		dev(this),
