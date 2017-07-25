@@ -45,6 +45,9 @@ namespace vkng
 		GLFWwindow* wnd;
 		vk::Instance instance;
 		vk::SurfaceKHR surface;
+#ifdef DEBUG
+		VkDebugReportCallbackEXT report_callback;
+#endif
 
 		app(const string& title, vec2 winsize);
 		~app();

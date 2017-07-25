@@ -25,6 +25,13 @@ namespace vkng {
 		dcfo.pQueueCreateInfos = qu_cfo.data();
 		vk::PhysicalDeviceFeatures devfeat;
 		dcfo.pEnabledFeatures = &devfeat;
+		vector<const char*> layer_names{
+#ifdef DEBUG
+			"VK_LAYER_LUNARG_standard_validation"
+#endif
+		};
+		dcfo.enabledLayerCount = layer_names.size();
+		dcfo.ppEnabledLayerNames = layer_names.data();
 		dev = pdevice.createDeviceUnique(dcfo);
 
 		graphics_qu = dev->getQueue(qu_fam.graphics, 0);

@@ -1,8 +1,36 @@
 #include "app.h"
 #include "timer.h"
 
+VkResult CreateDebugReportCallbackEXT(VkInstance instance, VkDebugReportCallbackCreateInfoEXT* pCreateInfo, VkAllocationCallbacks* pAllocator, VkDebugReportCallbackEXT* pCallback) {
+    auto func = (PFN_vkCreateDebugReportCallbackEXT) vkGetInstanceProcAddr(instance, "vkCreateDebugReportCallbackEXT");
+    if (func != nullptr) {
+        return func(instance, pCreateInfo, pAllocator, pCallback);
+    } else {
+        return VK_ERROR_EXTENSION_NOT_PRESENT;
+    }
+}
+void DestroyDebugReportCallbackEXT(VkInstance instance, VkDebugReportCallbackEXT callback, VkAllocationCallbacks* pAllocator) {
+    auto func = (PFN_vkDestroyDebugReportCallbackEXT) vkGetInstanceProcAddr(instance, "vkDestroyDebugReportCallbackEXT");
+    if (func != nullptr) {
+        func(instance, callback, pAllocator);
+    }
+}
+
 namespace vkng
 {
+	static VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(
+		VkDebugReportFlagsEXT flags,
+		VkDebugReportObjectTypeEXT objType,
+		uint64_t obj,
+		size_t location,
+		int32_t code,
+		const char* layerPrefix,
+		const char* msg,
+		void* userData)
+	{
+		std::cout << "validation layer " << layerPrefix << " @ " << location << ": " << msg << std::endl;
+		return VK_FALSE;
+	}
 	app::app(const string& title, vec2 winsize)
 	{
 		if (!glfwInit()) throw runtime_error("GLFW init failed!");
@@ -65,6 +93,14 @@ namespace vkng
 				ih->mouse_button_handler(t, (mouse_button)button, (input_action)action, (input_mod)mods);
 			}
 		});
+
+		/* print validation layers
+		auto ava_layers = vk::enumerateInstanceLayerProperties();
+		for (auto ly : ava_layers) {
+			cout << "avaliable instance layer " << ly.layerName << " description={" << ly.description
+				<< "} version=" << ly.specVersion << ":" << ly.implementationVersion << endl;
+		}*/
+
 		vk::InstanceCreateInfo icfo;
 		icfo.pApplicationInfo = &vk::ApplicationInfo {
 			title.c_str(), VK_MAKE_VERSION(0,1,0),
@@ -74,10 +110,26 @@ namespace vkng
 		uint glfw_ext_cnt = 0;
 		const char** glfw_ext;
 		glfw_ext = glfwGetRequiredInstanceExtensions(&glfw_ext_cnt);
-		icfo.enabledExtensionCount = glfw_ext_cnt;
-		icfo.ppEnabledExtensionNames = glfw_ext;
-		icfo.enabledLayerCount = 0;
+		vector<const char*> extentions(glfw_ext, glfw_ext+glfw_ext_cnt);
+#ifdef DEBUG
+		extentions.push_back(VK_EXT_DEBUG_REPORT_EXTENSION_NAME);
+#endif
+		icfo.enabledExtensionCount = extentions.size();
+		icfo.ppEnabledExtensionNames = extentions.data();
+		vector<const char*> layer_names{
+#ifdef DEBUG
+			"VK_LAYER_LUNARG_standard_validation"
+#endif
+		};
+		icfo.enabledLayerCount = layer_names.size();
+		icfo.ppEnabledLayerNames = layer_names.data();
 		instance = vk::createInstance(icfo);
+
+		CreateDebugReportCallbackEXT((VkInstance)instance, (VkDebugReportCallbackCreateInfoEXT*)&vk::DebugReportCallbackCreateInfoEXT{
+			vk::DebugReportFlagsEXT(),
+			debugCallback
+		}, nullptr, &report_callback);
+		
 
 		VkSurfaceKHR sf;
 		auto res = glfwCreateWindowSurface((VkInstance)instance,
@@ -112,6 +164,7 @@ namespace vkng
 	app::~app()
 	{
 		vkDestroySurfaceKHR((VkInstance)instance, (VkSurfaceKHR)surface, nullptr);
+		DestroyDebugReportCallbackEXT((VkInstance)instance, report_callback, nullptr);
 		instance.destroy();
 		glfwDestroyWindow(wnd);
 		glfwTerminate();

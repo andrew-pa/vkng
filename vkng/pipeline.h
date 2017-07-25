@@ -15,7 +15,8 @@ namespace vkng {
 			if (f != shaders.end()) return f->second.get();
 			else {
 				ifstream file(path, ios::ate | ios::binary);
-				vector<char> buffer((size_t)file.tellg());
+				auto size = (size_t)file.tellg();
+				vector<char> buffer(size);
 				file.seekg(0);
 				file.read(buffer.data(), buffer.size());
 				file.close();
@@ -46,6 +47,7 @@ namespace vkng {
 			options& viewport(vec2 viewport_size) {
 				viewport_ = vk::Viewport(0.f, 0.f, viewport_size.x, viewport_size.y, 0.f, 1.f);
 				scissor = vk::Rect2D(vk::Offset2D(), vk::Extent2D(viewport_size.x, viewport_size.y));
+				return *this;
 			}
 			options& input_assembly(vk::PrimitiveTopology topology, bool prim_restart = false) {
 				ia.topology = topology;
@@ -90,9 +92,10 @@ namespace vkng {
 			}
 		};
 		vk::UniquePipeline pp;
+		pipeline() {}
 		pipeline(device* d, vk::PipelineLayout layout, vk::RenderPass renderpass, uint32_t subpass, 
 			options b, 
-			vk::Pipeline basepipe = VK_NULL_HANDLE, int32_t baseindex = 0);
+			vk::Pipeline basepipe = VK_NULL_HANDLE, int32_t baseindex = -1);
 		~pipeline();
 	};
 }
