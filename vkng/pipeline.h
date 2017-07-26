@@ -41,6 +41,7 @@ namespace vkng {
 			vk::PipelineColorBlendStateCreateInfo blend_;
 			vector<vk::DynamicState> dynamic_states_;
 			vector<vk::PipelineShaderStageCreateInfo> shaders;
+			vector<string> shader_names;
 
 			options() {}
 
@@ -80,8 +81,10 @@ namespace vkng {
 			}
 
 			options& shader(vk::ShaderModule mod, vk::ShaderStageFlagBits stage, const string& name = "main") {
+				auto ni = shader_names.size();
+				shader_names.push_back(name);
 				shaders.push_back(vk::PipelineShaderStageCreateInfo {
-					vk::PipelineShaderStageCreateFlags(), stage, mod, name.c_str() });
+					vk::PipelineShaderStageCreateFlags(), stage, mod, shader_names[ni].c_str() });
 				return *this;
 			}
 			options& vertex_shader(vk::ShaderModule mod, const string& name = "main") {

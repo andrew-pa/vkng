@@ -17,10 +17,13 @@ namespace vkng {
 			}
 		} qu_fam;
 		vk::UniqueDevice dev;
+		vk::UniqueCommandPool cmdpool;
 		vk::Queue graphics_qu;
 		vk::Queue present_qu;
 
 		device(app* app);
+
+		vector<vk::UniqueCommandBuffer> alloc_cmd_buffers(size_t num = 1, vk::CommandBufferLevel lvl = vk::CommandBufferLevel::ePrimary);
 
 		~device();
 	};

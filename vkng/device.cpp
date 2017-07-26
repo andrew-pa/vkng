@@ -36,6 +36,16 @@ namespace vkng {
 
 		graphics_qu = dev->getQueue(qu_fam.graphics, 0);
 		present_qu = dev->getQueue(qu_fam.present, 0);
+
+		cmdpool = dev->createCommandPoolUnique(vk::CommandPoolCreateInfo{ vk::CommandPoolCreateFlags{}, (uint32_t)qu_fam.graphics });
+	}
+
+	vector<vk::UniqueCommandBuffer> device::alloc_cmd_buffers(size_t num, vk::CommandBufferLevel lvl) {
+		vk::CommandBufferAllocateInfo afo;
+		afo.level = lvl;
+		afo.commandPool = cmdpool.get();
+		afo.commandBufferCount = num;
+		return dev->allocateCommandBuffersUnique(afo);
 	}
 
 	device::~device() {

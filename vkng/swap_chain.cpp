@@ -1,6 +1,16 @@
 #include "swap_chain.h"
 
 namespace vkng {
+	uint32_t swap_chain::aquire_next(device* dev) {
+		return dev->dev->acquireNextImageKHR(sch.get(), 
+			std::numeric_limits<uint64_t>::max(), image_ava_sp.get(), VK_NULL_HANDLE).value;
+	}
+
+	void swap_chain::present(device * dev, uint32_t index) {
+		vk::PresentInfoKHR ifo{1, &render_fin_sp.get(), 1, &sch.get(), &index};
+		dev->present_qu.presentKHR(ifo);
+	}
+
 	swap_chain::swap_chain(app* app, device* dev) {
 		auto surf_caps = dev->pdevice.getSurfaceCapabilitiesKHR(app->surface);
 		uint32_t image_count = surf_caps.minImageCount + 1;
@@ -44,6 +54,10 @@ namespace vkng {
 			ivcfo.image = img;
 			image_views.push_back(dev->dev->createImageViewUnique(ivcfo));
 		}
+
+		vk::SemaphoreCreateInfo spcfo;
+		image_ava_sp = dev->dev->createSemaphoreUnique(spcfo);
+		render_fin_sp = dev->dev->createSemaphoreUnique(spcfo);
 	}
 
 	swap_chain::~swap_chain() {}
