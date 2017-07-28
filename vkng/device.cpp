@@ -27,7 +27,7 @@ namespace vkng {
 		dcfo.pEnabledFeatures = &devfeat;
 		vector<const char*> layer_names{
 #ifdef DEBUG
-			"VK_LAYER_LUNARG_standard_validation"
+			"VK_LAYER_LUNARG_standard_validation",
 #endif
 		};
 		dcfo.enabledLayerCount = layer_names.size();

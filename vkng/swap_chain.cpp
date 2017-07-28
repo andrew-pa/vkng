@@ -9,6 +9,7 @@ namespace vkng {
 	void swap_chain::present(device * dev, uint32_t index) {
 		vk::PresentInfoKHR ifo{1, &render_fin_sp.get(), 1, &sch.get(), &index};
 		dev->present_qu.presentKHR(ifo);
+		dev->present_qu.waitIdle();
 	}
 
 	swap_chain::swap_chain(app* app, device* dev) {

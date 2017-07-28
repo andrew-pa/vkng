@@ -141,7 +141,9 @@ struct test_app : public app {
 			vk::ImageView att[] = {
 				swch.image_views[i].get()
 			};
-			dev.dev->createFramebufferUnique(vk::FramebufferCreateInfo { vk::FramebufferCreateFlags(), rnp.get(), 1, att,
+			framebuffers[i] = dev.dev->createFramebufferUnique(vk::FramebufferCreateInfo { 
+				vk::FramebufferCreateFlags(),
+				rnp.get(), 1, att,
 				swch.extent.width, swch.extent.height, 1 });
 		}
 
@@ -149,15 +151,16 @@ struct test_app : public app {
 		for (size_t i = 0; i < cmd_bufs.size(); ++i) {
 			cmd_bufs[i]->begin(vk::CommandBufferBeginInfo{ vk::CommandBufferUsageFlagBits::eSimultaneousUse });
 
-			vk::ClearValue cc = vk::ClearColorValue(array<float,4>{0.8f, 0.6f, 0.f, 1.f});
-			cmd_bufs[i]->beginRenderPass(vk::RenderPassBeginInfo{ rnp.get(), framebuffers[i].get(), 
-				vk::Rect2D(vk::Offset2D(), swch.extent), 1, &cc}, vk::SubpassContents::eInline);
+			vk::ClearValue cc;
+			cc.color = vk::ClearColorValue{ array<float,4>{0.f, 0.f, 0.f, 1.f} };
+			auto rbio = vk::RenderPassBeginInfo{ rnp.get(), framebuffers[i].get(),
+				vk::Rect2D(vk::Offset2D(), swch.extent), 1, &cc };
+			cmd_bufs[i]->beginRenderPass(rbio, vk::SubpassContents::eInline);
 
 			cmd_bufs[i]->bindPipeline(vk::PipelineBindPoint::eGraphics, pp.get());
 			cmd_bufs[i]->draw(3, 1, 0, 0);
 
 			cmd_bufs[i]->endRenderPass();
-
 			cmd_bufs[i]->end();
 		}
 
@@ -184,6 +187,7 @@ struct test_app : public app {
 		vk::SubmitInfo sfo{ 1, &swch.image_ava_sp.get(), wait_stages, 1, &cmd_bufs[img_idx].get(), 
 								1, &swch.render_fin_sp.get() };
 		dev.graphics_qu.submit(sfo, VK_NULL_HANDLE);
+		swch.present(&dev, img_idx);
 	}
 };
 
