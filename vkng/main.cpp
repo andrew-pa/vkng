@@ -26,6 +26,10 @@ struct test_app : public app {
 		dev(this),
 		swch(this, &dev), shc(&dev)
 	{
+				create_swapchain_resources();
+	}
+
+	void create_swapchain_resources() {
 		vk::PipelineLayoutCreateInfo lyf;
 		layout = dev.dev->createPipelineLayoutUnique(lyf);
 
@@ -41,10 +45,6 @@ struct test_app : public app {
 		vk::SubpassDescription subpass{ vk::SubpassDescriptionFlags(), vk::PipelineBindPoint::eGraphics, 0, nullptr, 1, &col_ref };
 		vk::RenderPassCreateInfo rpcfo{ vk::RenderPassCreateFlags(), 1, &color_attachment, 1, &subpass, 1, &dpnd };
 		rnp = dev.dev->createRenderPassUnique(rpcfo);
-
-
-
-
 
 		VkPipelineShaderStageCreateInfo vertShaderStageInfo = {};
 		vertShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
@@ -178,11 +178,24 @@ struct test_app : public app {
 	void update(float t, float dt) override {
 
 	}
+	void recreate_swapchain() {
+		for (auto& fb : framebuffers) fb.reset();
+		for (auto& cb : cmd_bufs) cb.reset();
+		pp.reset();
+		layout.reset();
+		rnp.reset();
+		swch.recreate(this, &dev);
+		create_swapchain_resources();
+	}
 	void resize() override {
-
+		recreate_swapchain();
 	}
 	void render(float t, float dt) override {
 		auto img_idx = swch.aquire_next(&dev);
+		if (!img_idx.ok() && img_idx.err() == vk::Result::eErrorOutOfDateKHR || img_idx.err() == vk::Result::eSuboptimalKHR) {
+			recreate_swapchain();
+			return;
+		}
 		vk::PipelineStageFlags wait_stages[] = { vk::PipelineStageFlagBits::eColorAttachmentOutput };
 		vk::SubmitInfo sfo{ 1, &swch.image_ava_sp.get(), wait_stages, 1, &cmd_bufs[img_idx].get(), 
 								1, &swch.render_fin_sp.get() };

@@ -27,3 +27,32 @@ using namespace glm;
 using namespace std;
 
 #include <vulkan\vulkan.hpp>
+
+template<typename T, typename E>
+class result {
+	uint8_t type;
+	union { T t; E e; };
+public:
+	result(T t) : t(t), type(0) {}
+	result(E e) : e(e), type(1) {}
+
+	operator T() {
+		if (type) throw runtime_error("tried to unwrap error result");
+		return t;
+	}
+
+	inline bool ok() { return !type; }
+	inline E err() { return e; }
+
+	template<typename U>
+	inline result<U,E> map(function<U(T)> f) {
+		if (type) return result<U, E>(e);
+		else return result<U, E>(f(t));
+	}
+
+	template<typename G>
+	inline result<T, G> map_err(function<G(E)> f) {
+		if (!type) return result<T, G>(t);
+		else return result<T, G>(f(e));
+	}
+};

@@ -1,9 +1,13 @@
 #include "swap_chain.h"
 
 namespace vkng {
-	uint32_t swap_chain::aquire_next(device* dev) {
-		return dev->dev->acquireNextImageKHR(sch.get(), 
-			std::numeric_limits<uint64_t>::max(), image_ava_sp.get(), VK_NULL_HANDLE).value;
+	result<uint32_t, vk::Result> swap_chain::aquire_next(device* dev) {
+		auto v = dev->dev->acquireNextImageKHR(sch.get(), 
+			std::numeric_limits<uint64_t>::max(), image_ava_sp.get(), VK_NULL_HANDLE);
+		if (v.result != vk::Result::eSuccess)
+			return result<uint32_t, vk::Result>(v.result);
+		else
+			return result<uint32_t, vk::Result>(v.value);
 	}
 
 	void swap_chain::present(device * dev, uint32_t index) {
@@ -12,7 +16,23 @@ namespace vkng {
 		dev->present_qu.waitIdle();
 	}
 
+	void swap_chain::recreate(app* app, device* dev) {
+		for (auto& iv : image_views) iv.reset();
+		sch.reset();
+		dev->dev->waitIdle();
+		create(app, dev);
+	}
+
 	swap_chain::swap_chain(app* app, device* dev) {
+		create(app, dev);
+		vk::SemaphoreCreateInfo spcfo;
+		image_ava_sp = dev->dev->createSemaphoreUnique(spcfo);
+		render_fin_sp = dev->dev->createSemaphoreUnique(spcfo);
+	}
+
+	swap_chain::~swap_chain() {}
+
+	void swap_chain::create(app * app, device * dev) {
 		auto surf_caps = dev->pdevice.getSurfaceCapabilitiesKHR(app->surface);
 		uint32_t image_count = surf_caps.minImageCount + 1;
 		if (surf_caps.maxImageCount > 0 && image_count > surf_caps.maxImageCount)
@@ -51,15 +71,10 @@ namespace vkng {
 		ivcfo.subresourceRange.levelCount = 1;
 		ivcfo.subresourceRange.baseArrayLayer = 0;
 		ivcfo.subresourceRange.layerCount = 1;
+		image_views.clear();
 		for (auto img : images) {
 			ivcfo.image = img;
 			image_views.push_back(dev->dev->createImageViewUnique(ivcfo));
 		}
-
-		vk::SemaphoreCreateInfo spcfo;
-		image_ava_sp = dev->dev->createSemaphoreUnique(spcfo);
-		render_fin_sp = dev->dev->createSemaphoreUnique(spcfo);
 	}
-
-	swap_chain::~swap_chain() {}
 }
