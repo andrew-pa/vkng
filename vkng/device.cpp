@@ -1,6 +1,9 @@
 #include "device.h"
 #include <set>
 
+#define VMA_IMPLEMENTATION
+#include "vk_mem_alloc.h"
+
 namespace vkng {
 
 	device::device(app* app) {
@@ -38,6 +41,11 @@ namespace vkng {
 		present_qu = dev->getQueue(qu_fam.present, 0);
 
 		cmdpool = dev->createCommandPoolUnique(vk::CommandPoolCreateInfo{ vk::CommandPoolCreateFlags{}, (uint32_t)qu_fam.graphics });
+
+		VmaAllocatorCreateInfo cfo = {};
+		cfo.physicalDevice = (VkPhysicalDevice)pdevice;
+		cfo.device = (VkDevice)dev.get();
+		vmaCreateAllocator(&cfo, &allocator);
 	}
 
 	vector<vk::UniqueCommandBuffer> device::alloc_cmd_buffers(size_t num, vk::CommandBufferLevel lvl) {
@@ -49,7 +57,7 @@ namespace vkng {
 	}
 
 	device::~device() {
-		
+		vmaDestroyAllocator(allocator);
 	}
 
 
@@ -64,6 +72,29 @@ namespace vkng {
 				present = i;
 			}
 		}
+	}
+	
+	buffer::buffer(device* dev, vk::DeviceSize size, vk::BufferUsageFlagBits bufuse, vk::MemoryPropertyFlags memuse) : dev(dev) {
+		VmaMemoryRequirements mreq = {};
+		mreq.requiredFlags = (VkMemoryPropertyFlags)memuse;
+		auto res = vmaCreateBuffer(dev->allocator, (VkBufferCreateInfo*)&vk::BufferCreateInfo{ vk::BufferCreateFlags(), size, bufuse },
+			&mreq, &buf, &alloc, nullptr);
+		assert(res == VK_SUCCESS);
+	}
+
+	void* buffer::map() {
+		void* data;
+		auto res = vmaMapMemory(dev->allocator, alloc, &data);
+		assert(res == VK_SUCCESS);
+		return data;
+	}
+
+	void buffer::unmap() {
+		vmaUnmapMemory(dev->allocator, alloc);
+	}
+
+	buffer::~buffer() {
+		vmaDestroyBuffer(dev->allocator, buf, alloc);
 	}
 
 }

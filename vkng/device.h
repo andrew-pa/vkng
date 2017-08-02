@@ -1,8 +1,24 @@
 #pragma once
 #include "cmmn.h"
 #include "app.h"
+#include "vk_mem_alloc.h"
 
 namespace vkng {
+	struct buffer {
+		struct device* dev;
+		VkBuffer buf;
+		VmaAllocation alloc;
+		buffer(device* dev, vk::DeviceSize size, vk::BufferUsageFlagBits bufuse, vk::MemoryPropertyFlags memuse);
+
+		operator vk::Buffer() {
+			return vk::Buffer(buf);
+		}
+
+		void* map();
+		void unmap();
+
+		~buffer();
+	};
 	struct device {
 		vk::PhysicalDevice  pdevice;
 		struct queue_families {
@@ -20,6 +36,7 @@ namespace vkng {
 		vk::UniqueCommandPool cmdpool;
 		vk::Queue graphics_qu;
 		vk::Queue present_qu;
+		VmaAllocator allocator;
 
 		device(app* app);
 

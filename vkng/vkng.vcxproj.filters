@@ -56,6 +56,9 @@
     <ClInclude Include="render_pass.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="vk_mem_alloc.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <CustomBuild Include="shader.vert" />

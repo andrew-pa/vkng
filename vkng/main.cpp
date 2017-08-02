@@ -3,20 +3,32 @@
 #include "device.h"
 #include "swap_chain.h"
 #include "pipeline.h"
-
-namespace vkng {
-}
-
 using namespace vkng;
+
+struct vertex {
+	vec2 pos;
+	vec3 col;
+
+	static vk::VertexInputBindingDescription binding_desc() {
+		return vk::VertexInputBindingDescription{ 0, sizeof(vertex) };
+	}
+
+	static array<vk::VertexInputAttributeDescription,2> attrib_desc() {
+		return {
+			vk::VertexInputAttributeDescription{0, 0, vk::Format::eR32G32Sfloat, offsetof(vertex, pos)},
+			vk::VertexInputAttributeDescription{0, 1, vk::Format::eR32G32B32Sfloat, offsetof(vertex, col)},
+		};
+	}
+};
 
 struct test_app : public app {
 	device dev;
 	swap_chain swch;
-	//unique_ptr<pipeline> pp;
 	vk::UniquePipelineLayout layout;
 	vk::UniqueRenderPass rnp;
 	vk::UniquePipeline pp;
 	shader_cashe shc;
+	unique_ptr<buffer> buf;
 
 	vector<vk::UniqueFramebuffer> framebuffers;
 	vector<vk::UniqueCommandBuffer> cmd_bufs;
@@ -26,7 +38,19 @@ struct test_app : public app {
 		dev(this),
 		swch(this, &dev), shc(&dev)
 	{
-				create_swapchain_resources();
+		vector<vertex> vertices = vector<vertex> {
+			{{0.0f, -0.5f}, {1.0f, 0.0f, 0.0f}},
+			{{0.5f, 0.5f}, {0.0f, 1.0f, 0.0f}},
+			{{-0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}}
+		};
+		buf = unique_ptr<buffer>(new buffer(&dev, sizeof(vertex)*vertices.size(), vk::BufferUsageFlagBits::eVertexBuffer,
+			vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent));
+
+		auto data = buf->map();
+		memcpy(data, vertices.data(), sizeof(vertex)*vertices.size());
+		buf->unmap();
+
+		create_swapchain_resources();
 	}
 
 	void create_swapchain_resources() {
@@ -46,6 +70,8 @@ struct test_app : public app {
 		vk::RenderPassCreateInfo rpcfo{ vk::RenderPassCreateFlags(), 1, &color_attachment, 1, &subpass, 1, &dpnd };
 		rnp = dev.dev->createRenderPassUnique(rpcfo);
 
+
+#pragma region Pipeline
 		VkPipelineShaderStageCreateInfo vertShaderStageInfo = {};
 		vertShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
 		vertShaderStageInfo.stage = VK_SHADER_STAGE_VERTEX_BIT;
@@ -62,8 +88,11 @@ struct test_app : public app {
 
 		VkPipelineVertexInputStateCreateInfo vertexInputInfo = {};
 		vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-		vertexInputInfo.vertexBindingDescriptionCount = 0;
-		vertexInputInfo.vertexAttributeDescriptionCount = 0;
+		auto bd = vertex::binding_desc(); auto ad = vertex::attrib_desc();
+		vertexInputInfo.vertexBindingDescriptionCount = 1;
+		vertexInputInfo.pVertexBindingDescriptions = (VkVertexInputBindingDescription*)&bd;
+		vertexInputInfo.vertexAttributeDescriptionCount = ad.size();
+		vertexInputInfo.pVertexAttributeDescriptions = (VkVertexInputAttributeDescription*)ad.data();
 
 		VkPipelineInputAssemblyStateCreateInfo inputAssembly = {};
 		inputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
@@ -135,6 +164,7 @@ struct test_app : public app {
 		pipelineInfo.basePipelineHandle = VK_NULL_HANDLE;
 
 		pp = dev.dev->createGraphicsPipelineUnique(VK_NULL_HANDLE, pipelineInfo);
+#pragma endregion
 
 		framebuffers.resize(swch.image_views.size());
 		for (size_t i = 0; i < swch.image_views.size(); ++i) {
@@ -152,27 +182,26 @@ struct test_app : public app {
 			cmd_bufs[i]->begin(vk::CommandBufferBeginInfo{ vk::CommandBufferUsageFlagBits::eSimultaneousUse });
 
 			vk::ClearValue cc;
-			cc.color = vk::ClearColorValue{ array<float,4>{0.f, 0.f, 0.f, 1.f} };
+			cc.color = vk::ClearColorValue{ array<float,4>{1.f, 0.f, 0.f, 1.f} };
 			auto rbio = vk::RenderPassBeginInfo{ rnp.get(), framebuffers[i].get(),
 				vk::Rect2D(vk::Offset2D(), swch.extent), 1, &cc };
 			cmd_bufs[i]->beginRenderPass(rbio, vk::SubpassContents::eInline);
 
 			cmd_bufs[i]->bindPipeline(vk::PipelineBindPoint::eGraphics, pp.get());
+
+			/*vk::Buffer bufs[] = { vk::Buffer(buf->buf) };
+			vk::DeviceSize offsets[] = { 0 };
+			cmd_bufs[i]->bindVertexBuffers(0, 1, bufs, offsets);*/
+
+			VkBuffer vertexBuffers[] = { buf->buf };
+			VkDeviceSize offsets[] = { 0 };
+			vkCmdBindVertexBuffers((VkCommandBuffer)cmd_bufs[i].get(), 0, 1, vertexBuffers, offsets);
+
 			cmd_bufs[i]->draw(3, 1, 0, 0);
 
 			cmd_bufs[i]->endRenderPass();
 			cmd_bufs[i]->end();
 		}
-
-		/*pp = make_unique<pipeline>(&dev, layout.get(), rnp.get(), 0,
-			pipeline::options()
-				.input_assembly(vk::PrimitiveTopology::eTriangleList)
-				.viewport(vec2(swch.extent.width, swch.extent.height))
-				.rasterizer()
-				.blend(vk::PipelineColorBlendStateCreateInfo{}, { vk::PipelineColorBlendAttachmentState {} })
-				.vertex_shader(shc.load_shader("shader.vert.spv"))
-				.fragment_shader(shc.load_shader("shader.frag.spv"))
-		);*/
 	}
 
 	void update(float t, float dt) override {

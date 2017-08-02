@@ -140,6 +140,7 @@
     <ClInclude Include="render_pass.h" />
     <ClInclude Include="swap_chain.h" />
     <ClInclude Include="timer.h" />
+    <ClInclude Include="vk_mem_alloc.h" />
   </ItemGroup>
   <ItemGroup>
     <CustomBuild Include="shader.frag">

@@ -97,7 +97,7 @@ namespace vkng {
 		vk::UniquePipeline pp;
 		pipeline() {}
 		pipeline(device* d, vk::PipelineLayout layout, vk::RenderPass renderpass, uint32_t subpass, 
-			options b, 
+			const options& b, 
 			vk::Pipeline basepipe = VK_NULL_HANDLE, int32_t baseindex = -1);
 		~pipeline();
 	};
