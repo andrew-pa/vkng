@@ -15,10 +15,7 @@ void DestroyDebugReportCallbackEXT(VkInstance instance, VkDebugReportCallbackEXT
         func(instance, callback, pAllocator);
     }
 }
-
-namespace vkng
-{
-	static VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(
+static VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(
 		VkDebugReportFlagsEXT flags,
 		VkDebugReportObjectTypeEXT objType,
 		uint64_t obj,
@@ -31,6 +28,9 @@ namespace vkng
 		std::cout << "validation layer " << layerPrefix << " @ " << location << ": " << msg << std::endl;
 		return VK_FALSE;
 	}
+namespace vkng
+{
+	
 	app::app(const string& title, vec2 winsize)
 	{
 		if (!glfwInit()) throw runtime_error("GLFW init failed!");

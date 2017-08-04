@@ -16,7 +16,7 @@ struct vertex {
 	static array<vk::VertexInputAttributeDescription,2> attrib_desc() {
 		return {
 			vk::VertexInputAttributeDescription{0, 0, vk::Format::eR32G32Sfloat, offsetof(vertex, pos)},
-			vk::VertexInputAttributeDescription{0, 1, vk::Format::eR32G32B32Sfloat, offsetof(vertex, col)},
+			vk::VertexInputAttributeDescription{1, 0, vk::Format::eR32G32B32Sfloat, offsetof(vertex, col)},
 		};
 	}
 };
@@ -39,7 +39,7 @@ struct test_app : public app {
 		swch(this, &dev), shc(&dev)
 	{
 		vector<vertex> vertices = vector<vertex> {
-			{{0.0f, -0.5f}, {1.0f, 0.0f, 0.0f}},
+			{{0.0f, -0.5f}, {1.0f, 0.0f, 1.0f}},
 			{{0.5f, 0.5f}, {0.0f, 1.0f, 0.0f}},
 			{{-0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}}
 		};
@@ -49,8 +49,7 @@ struct test_app : public app {
 		auto data = buf->map();
 		memcpy(data, vertices.data(), sizeof(vertex)*vertices.size());
 		buf->unmap();
-
-		create_swapchain_resources();
+			create_swapchain_resources();
 	}
 
 	void create_swapchain_resources() {
@@ -91,6 +90,7 @@ struct test_app : public app {
 		auto bd = vertex::binding_desc(); auto ad = vertex::attrib_desc();
 		vertexInputInfo.vertexBindingDescriptionCount = 1;
 		vertexInputInfo.pVertexBindingDescriptions = (VkVertexInputBindingDescription*)&bd;
+
 		vertexInputInfo.vertexAttributeDescriptionCount = ad.size();
 		vertexInputInfo.pVertexAttributeDescriptions = (VkVertexInputAttributeDescription*)ad.data();
 
@@ -189,13 +189,10 @@ struct test_app : public app {
 
 			cmd_bufs[i]->bindPipeline(vk::PipelineBindPoint::eGraphics, pp.get());
 
-			/*vk::Buffer bufs[] = { vk::Buffer(buf->buf) };
+			vk::Buffer bufs[] = { vk::Buffer(buf->buf) };
 			vk::DeviceSize offsets[] = { 0 };
-			cmd_bufs[i]->bindVertexBuffers(0, 1, bufs, offsets);*/
+			cmd_bufs[i]->bindVertexBuffers(0, 1, bufs, offsets);
 
-			VkBuffer vertexBuffers[] = { buf->buf };
-			VkDeviceSize offsets[] = { 0 };
-			vkCmdBindVertexBuffers((VkCommandBuffer)cmd_bufs[i].get(), 0, 1, vertexBuffers, offsets);
 
 			cmd_bufs[i]->draw(3, 1, 0, 0);
 
@@ -236,4 +233,5 @@ struct test_app : public app {
 int main() {
 	test_app _;
 	_.run();
+	return 0;
 }
