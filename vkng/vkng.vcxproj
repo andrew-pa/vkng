@@ -137,6 +137,7 @@
     <ClInclude Include="cmmn.h" />
     <ClInclude Include="device.h" />
     <ClInclude Include="pipeline.h" />
+    <ClInclude Include="stb_image.h" />
     <ClInclude Include="swap_chain.h" />
     <ClInclude Include="timer.h" />
     <ClInclude Include="vk_mem_alloc.h" />

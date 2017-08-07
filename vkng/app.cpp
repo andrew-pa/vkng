@@ -155,8 +155,8 @@ namespace vkng
 			if(tm.delta_time() < target_delta_time)
 			{
 				auto missing_delta = target_delta_time - tm.delta_time();
-				if(missing_delta > 0.f)
-					this_thread::sleep_for(chrono::milliseconds((long)ceil(missing_delta)));
+				//if(missing_delta > 0.f)
+					//this_thread::sleep_for(chrono::milliseconds((long)ceil(missing_delta)));
 			}
 		}
 	}

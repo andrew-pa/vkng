@@ -5,9 +5,12 @@
 #include "pipeline.h"
 using namespace vkng;
 
+#define STB_IMAGE_IMPLEMENTATION
+#include "stb_image.h"
+
 struct vertex {
-	vec2 pos;
-	vec3 col;
+	vec3 pos;
+	vec2 tex;
 
 	static vk::VertexInputBindingDescription binding_desc() {
 		return vk::VertexInputBindingDescription{ 0, sizeof(vertex) };
@@ -15,8 +18,8 @@ struct vertex {
 
 	static array<vk::VertexInputAttributeDescription,2> attrib_desc() {
 		return {
-			vk::VertexInputAttributeDescription{0, 0, vk::Format::eR32G32Sfloat, offsetof(vertex, pos)},
-			vk::VertexInputAttributeDescription{1, 0, vk::Format::eR32G32B32Sfloat, offsetof(vertex, col)},
+			vk::VertexInputAttributeDescription{0, 0, vk::Format::eR32G32B32Sfloat, offsetof(vertex, pos)},
+			vk::VertexInputAttributeDescription{1, 0, vk::Format::eR32G32Sfloat, offsetof(vertex, tex)},
 		};
 	}
 };
@@ -42,6 +45,10 @@ struct test_app : public app {
 	unique_ptr<buffer> ubuf;
 	cam_uni_buf* ubuf_data;
 
+	unique_ptr<image> tex;
+	vk::UniqueImageView tex_view;
+	vk::UniqueSampler samp;
+
 	vector<vk::UniqueFramebuffer> framebuffers;
 	vector<vk::UniqueCommandBuffer> cmd_bufs;
 
@@ -50,14 +57,23 @@ struct test_app : public app {
 		dev(this),
 		swch(this, &dev), shc(&dev)
 	{
+		auto cb = move(dev.alloc_cmd_buffers()[0]);
+		cb->begin(vk::CommandBufferBeginInfo{ vk::CommandBufferUsageFlagBits::eOneTimeSubmit });
+
+#pragma region create vertex/index buffers
 		vector<vertex> vertices = vector<vertex> {
-			{{-1.f, -1.f}, {1.0f, 0.0f, 0.0f}},
-			{{1.f, -1.f}, {0.0f, 1.0f, 0.0f}},
-			{{1.f, 1.f}, {0.0f, 0.0f, 1.0f}},
-			{{-1.f, 1.f}, {1.0f, 1.0f, 1.0f}}
+			{{-1.f, -1.f, 0.f}, {1.0f, 0.0f}},
+			{{1.f, -1.f, 0.f}, {0.0f, 0.0f}},
+			{{1.f, 1.f, 0.f}, {0.0f, 1.0f}},
+			{{-1.f, 1.f, 0.f}, {1.0f, 1.0f}},
+			{{-1.f, -1.f, -1.f}, {1.0f, 0.0f}},
+			{{1.f, -1.f, -1.f}, {0.0f, 0.0f}},
+			{{1.f, 1.f, -1.f}, {0.0f, 1.0f}},
+			{{-1.f, 1.f, -1.f}, {1.0f, 1.0f}}
 		};
 		vector<uint16> indices = {
-			0,1,2,2,3,0
+			0,1,2,2,3,0,
+			4,5,6,6,7,4,
 		};
 
 		auto vstg_buf = buffer(&dev, sizeof(vertex)*vertices.size(), vk::BufferUsageFlagBits::eTransferSrc,
@@ -80,11 +96,38 @@ struct test_app : public app {
 			vk::BufferUsageFlagBits::eIndexBuffer | vk::BufferUsageFlagBits::eTransferDst,
 			vk::MemoryPropertyFlagBits::eDeviceLocal));
 
-		auto cb = move(dev.alloc_cmd_buffers()[0]);
-		cb->begin(vk::CommandBufferBeginInfo{ vk::CommandBufferUsageFlagBits::eOneTimeSubmit });
-
 		cb->copyBuffer(vstg_buf, vbuf->operator vk::Buffer(), { vk::BufferCopy{0,0,sizeof(vertex)*vertices.size()} });
 		cb->copyBuffer(istg_buf, ibuf->operator vk::Buffer(), { vk::BufferCopy{0,0,sizeof(uint16)*indices.size()} });
+#pragma endregion
+
+#pragma region create texture
+		int w, h, ch;
+		auto img = stbi_load("C:\\Users\\andre\\Source\\vkng\\vkng\\tex.png", &w, &h, &ch, STBI_rgb_alpha);
+		vk::DeviceSize img_size = w*h*4;
+
+		auto imgsb = buffer(&dev, img_size, vk::BufferUsageFlagBits::eTransferSrc, vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
+		data = imgsb.map();
+		memcpy(data, img, img_size);
+		imgsb.unmap();
+
+		tex = make_unique<image>(&dev, vk::ImageType::e2D, vk::Extent3D(w, h, 1), vk::Format::eR8G8B8A8Unorm, vk::ImageTiling::eOptimal, 
+			vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eSampled, vk::MemoryPropertyFlagBits::eDeviceLocal);
+
+		auto subresrange = vk::ImageSubresourceRange{ vk::ImageAspectFlagBits::eColor, 0,1,0,1 };
+		cb->pipelineBarrier(vk::PipelineStageFlagBits::eTopOfPipe, vk::PipelineStageFlagBits::eTopOfPipe, vk::DependencyFlags(), {}, {}, {
+			vk::ImageMemoryBarrier{vk::AccessFlags(), vk::AccessFlagBits::eTransferWrite, vk::ImageLayout::eUndefined, vk::ImageLayout::eTransferDstOptimal, 
+				VK_QUEUE_FAMILY_IGNORED, VK_QUEUE_FAMILY_IGNORED, tex->operator vk::Image(), subresrange}
+		});
+
+		cb->copyBufferToImage(imgsb, tex->operator vk::Image(), vk::ImageLayout::eTransferDstOptimal, {
+			vk::BufferImageCopy{0, 0, 0, vk::ImageSubresourceLayers{vk::ImageAspectFlagBits::eColor, 0, 0, 1}, {0,0,0}, {(uint32_t)w,(uint32_t)h,1}}
+		});
+		
+		cb->pipelineBarrier(vk::PipelineStageFlagBits::eTopOfPipe, vk::PipelineStageFlagBits::eTopOfPipe, vk::DependencyFlags(), {}, {}, {
+			vk::ImageMemoryBarrier{vk::AccessFlagBits::eTransferWrite, vk::AccessFlagBits::eShaderRead, vk::ImageLayout::eTransferDstOptimal, vk::ImageLayout::eShaderReadOnlyOptimal, 
+				VK_QUEUE_FAMILY_IGNORED, VK_QUEUE_FAMILY_IGNORED, tex->operator vk::Image(), subresrange}
+		});
+#pragma endregion
 
 		cb->end();
 		dev.graphics_qu.submit({ vk::SubmitInfo{0,nullptr,nullptr,1,&cb.get()} }, nullptr);
@@ -92,20 +135,36 @@ struct test_app : public app {
 		ubuf = make_unique<buffer>(&dev, sizeof(cam_uni_buf), vk::BufferUsageFlagBits::eUniformBuffer,
 			vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent, make_optional((void**)&ubuf_data));
 
-		vk::DescriptorPoolSize pool_size{ vk::DescriptorType::eUniformBuffer, 1 };
-		vk::DescriptorPoolCreateInfo pool_info{ vk::DescriptorPoolCreateFlags(), 1, 1, &pool_size };
+		tex_view = dev.dev->createImageViewUnique(vk::ImageViewCreateInfo{ vk::ImageViewCreateFlags(), tex->operator vk::Image(), vk::ImageViewType::e2D,
+			vk::Format::eR8G8B8A8Unorm, vk::ComponentMapping(), subresrange });
+
+		samp = dev.dev->createSamplerUnique(vk::SamplerCreateInfo{
+			vk::SamplerCreateFlags(), vk::Filter::eLinear, vk::Filter::eLinear, vk::SamplerMipmapMode::eNearest, vk::SamplerAddressMode::eRepeat,
+			vk::SamplerAddressMode::eRepeat, vk::SamplerAddressMode::eRepeat, 0.f, VK_TRUE, 16.f
+		});
+
+
+
+		vector<vk::DescriptorPoolSize> pool_sizes = {
+			{ vk::DescriptorType::eUniformBuffer, 1 },
+			{ vk::DescriptorType::eCombinedImageSampler, 1 }
+		};
+		vk::DescriptorPoolCreateInfo pool_info{ vk::DescriptorPoolCreateFlags(), 1, pool_sizes.size(), pool_sizes.data() };
 		descpool = dev.dev->createDescriptorPoolUnique(pool_info);
 
 		descset_layout = dev.create_desc_set_layout({
-			vk::DescriptorSetLayoutBinding{0, vk::DescriptorType::eUniformBuffer, 1, vk::ShaderStageFlagBits::eVertex}
+			vk::DescriptorSetLayoutBinding{0, vk::DescriptorType::eUniformBuffer, 1, vk::ShaderStageFlagBits::eVertex},
+			vk::DescriptorSetLayoutBinding{1, vk::DescriptorType::eSampler, 1, vk::ShaderStageFlagBits::eFragment}
 		});
 
 		vk::DescriptorSetLayout layouts[] = { descset_layout.get() };
 		descset = move(dev.dev->allocateDescriptorSetsUnique(vk::DescriptorSetAllocateInfo{ descpool.get(), 1, layouts })[0]);
 
 		vk::DescriptorBufferInfo bufifo{ ubuf->operator vk::Buffer(),  0, sizeof(cam_uni_buf) };
-		vk::WriteDescriptorSet desc_write{ descset.get(), 0, 0, 1, vk::DescriptorType::eUniformBuffer, nullptr, &bufifo };
-		dev.dev->updateDescriptorSets({ desc_write }, {});
+		dev.dev->updateDescriptorSets({
+			{ descset.get(), 0, 0, 1, vk::DescriptorType::eUniformBuffer, nullptr, &bufifo },
+			{ descset.get(), 1, 0, 1, vk::DescriptorType::eCombinedImageSampler, &vk::DescriptorImageInfo{samp.get(), tex_view.get(), vk::ImageLayout::eShaderReadOnlyOptimal} }
+		}, {});
 
 		layout = dev.dev->createPipelineLayoutUnique(vk::PipelineLayoutCreateInfo { vk::PipelineLayoutCreateFlags(), 1, &descset_layout.get() });
 
@@ -242,7 +301,7 @@ struct test_app : public app {
 			cmd_bufs[i]->begin(vk::CommandBufferBeginInfo{ vk::CommandBufferUsageFlagBits::eSimultaneousUse });
 
 			vk::ClearValue cc;
-			cc.color = vk::ClearColorValue{ array<float,4>{0.f, 0.f, 0.f, 1.f} };
+			cc.color = vk::ClearColorValue{ array<float,4>{0.1f, 0.1f, 0.1f, 1.f} };
 			auto rbio = vk::RenderPassBeginInfo{ rnp.get(), framebuffers[i].get(),
 				vk::Rect2D(vk::Offset2D(), swch.extent), 1, &cc };
 			cmd_bufs[i]->beginRenderPass(rbio, vk::SubpassContents::eInline);
@@ -255,7 +314,7 @@ struct test_app : public app {
 			cmd_bufs[i]->bindVertexBuffers(0, 1, bufs, offsets);
 			cmd_bufs[i]->bindIndexBuffer(ibuf->operator vk::Buffer(), 0, vk::IndexType::eUint16);
 
-			cmd_bufs[i]->drawIndexed(6, 1, 0, 0, 0);
+			cmd_bufs[i]->drawIndexed(12, 1, 0, 0, 0);
 
 			cmd_bufs[i]->endRenderPass();
 			cmd_bufs[i]->end();
@@ -267,7 +326,7 @@ struct test_app : public app {
 		proj[1][1] *= -1; //hack to flip Y axis
 		ubuf_data->view_proj = proj
 			* lookAt(vec3(2.f,2.f,2.f), vec3(0.f, 0.f, 0.f), vec3(0.f, 0.f, 1.f));
-		ubuf_data->model = rotate(mat4(1), t, vec3(0.f, 0.f, 1.f));
+		ubuf_data->model = rotate(mat4(1), t, vec3(0.f, 0.2f, 1.f));
 	}
 	void recreate_swapchain() {
 		for (auto& fb : framebuffers) fb.reset();

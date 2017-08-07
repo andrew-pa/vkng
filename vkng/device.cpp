@@ -26,7 +26,9 @@ namespace vkng {
 		}
 		dcfo.queueCreateInfoCount = qu_cfo.size();
 		dcfo.pQueueCreateInfos = qu_cfo.data();
+
 		vk::PhysicalDeviceFeatures devfeat;
+		devfeat.samplerAnisotropy = VK_TRUE;
 		dcfo.pEnabledFeatures = &devfeat;
 		vector<const char*> layer_names{
 #ifdef DEBUG
@@ -106,4 +108,17 @@ namespace vkng {
 		vmaDestroyBuffer(dev->allocator, buf, alloc);
 	}
 
+	image::image(device * dev, vk::ImageType type, vk::Extent3D size, vk::Format fmt, vk::ImageTiling til, vk::ImageUsageFlags use, vk::MemoryPropertyFlags memuse) :dev(dev) {
+		VmaMemoryRequirements mreq = {};
+		mreq.requiredFlags = (VkMemoryPropertyFlags)memuse;
+		VmaAllocationInfo alli;
+		auto res = vmaCreateImage(dev->allocator, (VkImageCreateInfo*)&vk::ImageCreateInfo {
+			vk::ImageCreateFlags(), type, fmt, size, 1, 1, 
+			vk::SampleCountFlagBits::e1, til, use
+		}, &mreq, &img, &alloc, &alli);
+		assert(res == VK_SUCCESS);
+	}
+	image::~image() {
+		vmaDestroyImage(dev->allocator, img, alloc);
+	}
 }

@@ -20,6 +20,19 @@ namespace vkng {
 
 		~buffer();
 	};
+	struct image {
+		struct device* dev;
+		VkImage img;
+		VmaAllocation alloc;
+		image(device* dev, vk::ImageType type, vk::Extent3D size, vk::Format fmt, vk::ImageTiling til, vk::ImageUsageFlags use, vk::MemoryPropertyFlags memuse);
+
+		operator vk::Image() {
+			return vk::Image(img);
+		}
+
+		~image();
+	};
+
 	struct device {
 		vk::PhysicalDevice  pdevice;
 		struct queue_families {
