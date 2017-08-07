@@ -82,6 +82,7 @@
       <SDLCheck>true</SDLCheck>
       <AdditionalIncludeDirectories>C:\VulkanSDK\1.0.54.0\Include;C:\Users\andre\Source\share\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PreprocessorDefinitions>DEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <LanguageStandard>stdcpplatest</LanguageStandard>
     </ClCompile>
     <Link>
       <AdditionalLibraryDirectories>C:\VulkanSDK\1.0.54.0\Lib32;C:\Users\andre\Source\share\lib\$(Configuration)\;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
@@ -129,7 +130,6 @@
     <ClCompile Include="device.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="pipeline.cpp" />
-    <ClCompile Include="render_pass.cpp" />
     <ClCompile Include="swap_chain.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -137,7 +137,6 @@
     <ClInclude Include="cmmn.h" />
     <ClInclude Include="device.h" />
     <ClInclude Include="pipeline.h" />
-    <ClInclude Include="render_pass.h" />
     <ClInclude Include="swap_chain.h" />
     <ClInclude Include="timer.h" />
     <ClInclude Include="vk_mem_alloc.h" />

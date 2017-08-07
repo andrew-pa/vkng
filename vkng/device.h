@@ -8,7 +8,8 @@ namespace vkng {
 		struct device* dev;
 		VkBuffer buf;
 		VmaAllocation alloc;
-		buffer(device* dev, vk::DeviceSize size, vk::BufferUsageFlagBits bufuse, vk::MemoryPropertyFlags memuse);
+		buffer(device* dev, vk::DeviceSize size, vk::BufferUsageFlags bufuse, vk::MemoryPropertyFlags memuse, 
+			optional<void**> persistant_map = {});
 
 		operator vk::Buffer() {
 			return vk::Buffer(buf);
@@ -41,6 +42,8 @@ namespace vkng {
 		device(app* app);
 
 		vector<vk::UniqueCommandBuffer> alloc_cmd_buffers(size_t num = 1, vk::CommandBufferLevel lvl = vk::CommandBufferLevel::ePrimary);
+
+		vk::UniqueDescriptorSetLayout create_desc_set_layout(vector<vk::DescriptorSetLayoutBinding> bindings);
 
 		~device();
 	};

@@ -56,6 +56,10 @@ namespace vkng {
 		return dev->allocateCommandBuffersUnique(afo);
 	}
 
+	vk::UniqueDescriptorSetLayout device::create_desc_set_layout(vector<vk::DescriptorSetLayoutBinding> bindings) {
+		return dev->createDescriptorSetLayoutUnique(vk::DescriptorSetLayoutCreateInfo{ vk::DescriptorSetLayoutCreateFlags(), bindings.size(), bindings.data() });
+	}
+
 	device::~device() {
 		vmaDestroyAllocator(allocator);
 	}
@@ -74,11 +78,16 @@ namespace vkng {
 		}
 	}
 	
-	buffer::buffer(device* dev, vk::DeviceSize size, vk::BufferUsageFlagBits bufuse, vk::MemoryPropertyFlags memuse) : dev(dev) {
+	buffer::buffer(device* dev, vk::DeviceSize size, vk::BufferUsageFlags bufuse,
+			vk::MemoryPropertyFlags memuse, optional<void**> persistent_map) : dev(dev)
+	{
 		VmaMemoryRequirements mreq = {};
+		mreq.flags = persistent_map ? VMA_MEMORY_REQUIREMENT_PERSISTENT_MAP_BIT : 0;
 		mreq.requiredFlags = (VkMemoryPropertyFlags)memuse;
+		VmaAllocationInfo alli;
 		auto res = vmaCreateBuffer(dev->allocator, (VkBufferCreateInfo*)&vk::BufferCreateInfo{ vk::BufferCreateFlags(), size, bufuse },
-			&mreq, &buf, &alloc, nullptr);
+			&mreq, &buf, &alloc, &alli);
+		if (persistent_map) **persistent_map = alli.pMappedData;
 		assert(res == VK_SUCCESS);
 	}
 

@@ -21,6 +21,10 @@ struct vertex {
 	}
 };
 
+struct cam_uni_buf {
+	mat4 model, view_proj;
+};
+
 struct test_app : public app {
 	device dev;
 	swap_chain swch;
@@ -28,7 +32,15 @@ struct test_app : public app {
 	vk::UniqueRenderPass rnp;
 	vk::UniquePipeline pp;
 	shader_cashe shc;
-	unique_ptr<buffer> buf;
+
+	vk::UniqueDescriptorPool descpool;
+	vk::UniqueDescriptorSetLayout descset_layout;
+	vk::UniqueDescriptorSet descset;
+
+	unique_ptr<buffer> vbuf;
+	unique_ptr<buffer> ibuf;
+	unique_ptr<buffer> ubuf;
+	cam_uni_buf* ubuf_data;
 
 	vector<vk::UniqueFramebuffer> framebuffers;
 	vector<vk::UniqueCommandBuffer> cmd_bufs;
@@ -39,27 +51,74 @@ struct test_app : public app {
 		swch(this, &dev), shc(&dev)
 	{
 		vector<vertex> vertices = vector<vertex> {
-			{{0.0f, -0.5f}, {1.0f, 0.0f, 1.0f}},
-			{{0.5f, 0.5f}, {0.0f, 1.0f, 0.0f}},
-			{{-0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}}
+			{{-1.f, -1.f}, {1.0f, 0.0f, 0.0f}},
+			{{1.f, -1.f}, {0.0f, 1.0f, 0.0f}},
+			{{1.f, 1.f}, {0.0f, 0.0f, 1.0f}},
+			{{-1.f, 1.f}, {1.0f, 1.0f, 1.0f}}
 		};
-		buf = unique_ptr<buffer>(new buffer(&dev, sizeof(vertex)*vertices.size(), vk::BufferUsageFlagBits::eVertexBuffer,
-			vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent));
+		vector<uint16> indices = {
+			0,1,2,2,3,0
+		};
 
-		auto data = buf->map();
+		auto vstg_buf = buffer(&dev, sizeof(vertex)*vertices.size(), vk::BufferUsageFlagBits::eTransferSrc,
+			vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
+		auto istg_buf = buffer(&dev, sizeof(uint16)*indices.size(), vk::BufferUsageFlagBits::eTransferSrc,
+			vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
+
+		auto data = vstg_buf.map();
 		memcpy(data, vertices.data(), sizeof(vertex)*vertices.size());
-		buf->unmap();
-			create_swapchain_resources();
+		vstg_buf.unmap();
+
+		data = istg_buf.map();
+		memcpy(data, indices.data(), sizeof(uint16)*indices.size());
+		istg_buf.unmap();
+
+		vbuf = unique_ptr<buffer>(new buffer(&dev, sizeof(vertex)*vertices.size(), 
+			vk::BufferUsageFlagBits::eVertexBuffer | vk::BufferUsageFlagBits::eTransferDst,
+			vk::MemoryPropertyFlagBits::eDeviceLocal));
+		ibuf = unique_ptr<buffer>(new buffer(&dev, sizeof(uint16)*indices.size(), 
+			vk::BufferUsageFlagBits::eIndexBuffer | vk::BufferUsageFlagBits::eTransferDst,
+			vk::MemoryPropertyFlagBits::eDeviceLocal));
+
+		auto cb = move(dev.alloc_cmd_buffers()[0]);
+		cb->begin(vk::CommandBufferBeginInfo{ vk::CommandBufferUsageFlagBits::eOneTimeSubmit });
+
+		cb->copyBuffer(vstg_buf, vbuf->operator vk::Buffer(), { vk::BufferCopy{0,0,sizeof(vertex)*vertices.size()} });
+		cb->copyBuffer(istg_buf, ibuf->operator vk::Buffer(), { vk::BufferCopy{0,0,sizeof(uint16)*indices.size()} });
+
+		cb->end();
+		dev.graphics_qu.submit({ vk::SubmitInfo{0,nullptr,nullptr,1,&cb.get()} }, nullptr);
+
+		ubuf = make_unique<buffer>(&dev, sizeof(cam_uni_buf), vk::BufferUsageFlagBits::eUniformBuffer,
+			vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent, make_optional((void**)&ubuf_data));
+
+		vk::DescriptorPoolSize pool_size{ vk::DescriptorType::eUniformBuffer, 1 };
+		vk::DescriptorPoolCreateInfo pool_info{ vk::DescriptorPoolCreateFlags(), 1, 1, &pool_size };
+		descpool = dev.dev->createDescriptorPoolUnique(pool_info);
+
+		descset_layout = dev.create_desc_set_layout({
+			vk::DescriptorSetLayoutBinding{0, vk::DescriptorType::eUniformBuffer, 1, vk::ShaderStageFlagBits::eVertex}
+		});
+
+		vk::DescriptorSetLayout layouts[] = { descset_layout.get() };
+		descset = move(dev.dev->allocateDescriptorSetsUnique(vk::DescriptorSetAllocateInfo{ descpool.get(), 1, layouts })[0]);
+
+		vk::DescriptorBufferInfo bufifo{ ubuf->operator vk::Buffer(),  0, sizeof(cam_uni_buf) };
+		vk::WriteDescriptorSet desc_write{ descset.get(), 0, 0, 1, vk::DescriptorType::eUniformBuffer, nullptr, &bufifo };
+		dev.dev->updateDescriptorSets({ desc_write }, {});
+
+		layout = dev.dev->createPipelineLayoutUnique(vk::PipelineLayoutCreateInfo { vk::PipelineLayoutCreateFlags(), 1, &descset_layout.get() });
+
+		create_swapchain_resources();
+
+		dev.graphics_qu.waitIdle();
 	}
 
 	void create_swapchain_resources() {
-		vk::PipelineLayoutCreateInfo lyf;
-		layout = dev.dev->createPipelineLayoutUnique(lyf);
-
 		vk::AttachmentDescription color_attachment{ vk::AttachmentDescriptionFlags(),
-			swch.format, vk::SampleCountFlagBits::e1, vk::AttachmentLoadOp::eClear, vk::AttachmentStoreOp::eStore,
-			vk::AttachmentLoadOp::eDontCare, vk::AttachmentStoreOp::eDontCare,
-			vk::ImageLayout::eUndefined, vk::ImageLayout::ePresentSrcKHR };
+						swch.format, vk::SampleCountFlagBits::e1, vk::AttachmentLoadOp::eClear, vk::AttachmentStoreOp::eStore,
+						vk::AttachmentLoadOp::eDontCare, vk::AttachmentStoreOp::eDontCare,
+						vk::ImageLayout::eUndefined, vk::ImageLayout::ePresentSrcKHR };
 		vk::AttachmentReference col_ref{ 0, vk::ImageLayout::eColorAttachmentOptimal };
 		vk::SubpassDependency dpnd{ VK_SUBPASS_EXTERNAL, 0, vk::PipelineStageFlagBits::eColorAttachmentOutput,
 			vk::PipelineStageFlagBits::eColorAttachmentOutput, vk::AccessFlagBits::eColorAttachmentRead, vk::AccessFlagBits::eColorAttachmentRead | vk::AccessFlagBits::eColorAttachmentWrite,
@@ -68,6 +127,7 @@ struct test_app : public app {
 		vk::SubpassDescription subpass{ vk::SubpassDescriptionFlags(), vk::PipelineBindPoint::eGraphics, 0, nullptr, 1, &col_ref };
 		vk::RenderPassCreateInfo rpcfo{ vk::RenderPassCreateFlags(), 1, &color_attachment, 1, &subpass, 1, &dpnd };
 		rnp = dev.dev->createRenderPassUnique(rpcfo);
+		
 
 
 #pragma region Pipeline
@@ -125,7 +185,7 @@ struct test_app : public app {
 		rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
 		rasterizer.lineWidth = 1.0f;
 		rasterizer.cullMode = VK_CULL_MODE_BACK_BIT;
-		rasterizer.frontFace = VK_FRONT_FACE_CLOCKWISE;
+		rasterizer.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
 		rasterizer.depthBiasEnable = VK_FALSE;
 
 		VkPipelineMultisampleStateCreateInfo multisampling = {};
@@ -182,19 +242,20 @@ struct test_app : public app {
 			cmd_bufs[i]->begin(vk::CommandBufferBeginInfo{ vk::CommandBufferUsageFlagBits::eSimultaneousUse });
 
 			vk::ClearValue cc;
-			cc.color = vk::ClearColorValue{ array<float,4>{1.f, 0.f, 0.f, 1.f} };
+			cc.color = vk::ClearColorValue{ array<float,4>{0.f, 0.f, 0.f, 1.f} };
 			auto rbio = vk::RenderPassBeginInfo{ rnp.get(), framebuffers[i].get(),
 				vk::Rect2D(vk::Offset2D(), swch.extent), 1, &cc };
 			cmd_bufs[i]->beginRenderPass(rbio, vk::SubpassContents::eInline);
 
 			cmd_bufs[i]->bindPipeline(vk::PipelineBindPoint::eGraphics, pp.get());
+			cmd_bufs[i]->bindDescriptorSets(vk::PipelineBindPoint::eGraphics, layout.get(), 0, { descset.get() }, { });
 
-			vk::Buffer bufs[] = { vk::Buffer(buf->buf) };
+			vk::Buffer bufs[] = { vk::Buffer(vbuf->buf) };
 			vk::DeviceSize offsets[] = { 0 };
 			cmd_bufs[i]->bindVertexBuffers(0, 1, bufs, offsets);
+			cmd_bufs[i]->bindIndexBuffer(ibuf->operator vk::Buffer(), 0, vk::IndexType::eUint16);
 
-
-			cmd_bufs[i]->draw(3, 1, 0, 0);
+			cmd_bufs[i]->drawIndexed(6, 1, 0, 0, 0);
 
 			cmd_bufs[i]->endRenderPass();
 			cmd_bufs[i]->end();
@@ -202,14 +263,18 @@ struct test_app : public app {
 	}
 
 	void update(float t, float dt) override {
-
+		auto proj = perspective(pi<float>() / 2.f, swch.extent.width / (float)swch.extent.height, 0.1f, 10.f);
+		proj[1][1] *= -1; //hack to flip Y axis
+		ubuf_data->view_proj = proj
+			* lookAt(vec3(2.f,2.f,2.f), vec3(0.f, 0.f, 0.f), vec3(0.f, 0.f, 1.f));
+		ubuf_data->model = rotate(mat4(1), t, vec3(0.f, 0.f, 1.f));
 	}
 	void recreate_swapchain() {
 		for (auto& fb : framebuffers) fb.reset();
 		for (auto& cb : cmd_bufs) cb.reset();
 		pp.reset();
-		layout.reset();
-		rnp.reset();
+		//layout.reset();
+		//rnp.reset();
 		swch.recreate(this, &dev);
 		create_swapchain_resources();
 	}
