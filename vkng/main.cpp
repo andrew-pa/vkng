@@ -24,6 +24,55 @@ struct vertex {
 	}
 };
 
+void generate_torus(vec2 r, int div, function<void(vec3, vec3, vec3, vec2)> vertex, function<void(size_t)> index)
+{
+	int ring_count = div;
+	int stack_count = div;
+
+	vector<tuple<vec3,vec3,vec3,vec2>> frvtx;
+	for (int i = 0; i < div + 1; ++i)
+	{
+		vec4 p = vec4(r.y, 0.f, 0.f, 1.f)*rotate(mat4(1), radians(i*360.f / (float)div), vec3(0, 0, 1))
+			+ vec4(r.x, 0.f, 0.f, 1.f);
+		vec2 tx = vec2(0, (float)i / div);
+		vec4 tg = vec4(0.f, -1.f, 0.f, 1.f)*rotate(mat4(1), radians(i*360.f / (float)div), vec3(0, 0, 1));
+		vec3 n = cross(vec3(tg), vec3(0.f, 0.f, -1.f));
+		vertex(vec3(p), vec3(n), vec3(tg), tx);
+		frvtx.push_back({vec3(p), n, vec3(tg), tx});
+	}
+
+	for (int ring = 1; ring < ring_count + 1; ++ring)
+	{
+		mat4 rot = rotate(mat4(1), radians(ring*360.f / (float)div), vec3(0, 1, 0));
+		for (int i = 0; i < stack_count + 1; ++i)
+		{
+			vec4 p = vec4(get<0>(frvtx[i]), 1.f);
+			vec4 nr = vec4(get<1>(frvtx[i]), 0.f);
+			vec4 tg = vec4(get<2>(frvtx[i]), 0.f);
+			p = p*rot;
+			nr = nr*rot;
+			tg = tg*rot;
+
+			vertex(vec3(p), vec3(nr),
+				vec3(tg), vec2(2.f*ring / (float)div, get<3>(frvtx[i]).y));
+		}
+	}
+
+	for (int ring = 0; ring < ring_count; ++ring)
+	{
+		for (int i = 0; i < stack_count; ++i)
+		{
+			index(ring*(div + 1) + i);
+			index((ring + 1)*(div + 1) + i);
+			index(ring*(div + 1) + i + 1);
+
+			index(ring*(div + 1) + i + 1);
+			index((ring + 1)*(div + 1) + i);
+			index((ring + 1)*(div + 1) + i + 1);
+		}
+	}
+}
+
 struct cam_uni_buf {
 	mat4 model, view_proj;
 };
@@ -41,7 +90,7 @@ struct test_app : public app {
 	vk::UniqueDescriptorSet descset;
 
 	unique_ptr<buffer> vbuf;
-	unique_ptr<buffer> ibuf;
+	unique_ptr<buffer> ibuf; uint32_t index_count;
 	unique_ptr<buffer> ubuf;
 	cam_uni_buf* ubuf_data;
 
@@ -61,24 +110,16 @@ struct test_app : public app {
 		cb->begin(vk::CommandBufferBeginInfo{ vk::CommandBufferUsageFlagBits::eOneTimeSubmit });
 
 #pragma region create vertex/index buffers
-		vector<vertex> vertices = vector<vertex> {
-			{{-1.f, -1.f, 0.f}, {1.0f, 0.0f}},
-			{{1.f, -1.f, 0.f}, {0.0f, 0.0f}},
-			{{1.f, 1.f, 0.f}, {0.0f, 1.0f}},
-			{{-1.f, 1.f, 0.f}, {1.0f, 1.0f}},
-			{{-1.f, -1.f, -1.f}, {1.0f, 0.0f}},
-			{{1.f, -1.f, -1.f}, {0.0f, 0.0f}},
-			{{1.f, 1.f, -1.f}, {0.0f, 1.0f}},
-			{{-1.f, 1.f, -1.f}, {1.0f, 1.0f}}
-		};
-		vector<uint16> indices = {
-			0,1,2,2,3,0,
-			4,5,6,6,7,4,
-		};
+		vector<vertex> vertices;
+		vector<uint32> indices;
+		generate_torus(vec2(1.f, 0.5f), 32, [&vertices](auto p, auto, auto, auto tx) {
+			vertices.push_back({ p,tx });
+		}, [&indices](auto ix) { indices.push_back(ix); });
+		index_count = indices.size();
 
 		auto vstg_buf = buffer(&dev, sizeof(vertex)*vertices.size(), vk::BufferUsageFlagBits::eTransferSrc,
 			vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
-		auto istg_buf = buffer(&dev, sizeof(uint16)*indices.size(), vk::BufferUsageFlagBits::eTransferSrc,
+		auto istg_buf = buffer(&dev, sizeof(uint32)*indices.size(), vk::BufferUsageFlagBits::eTransferSrc,
 			vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
 
 		auto data = vstg_buf.map();
@@ -86,18 +127,18 @@ struct test_app : public app {
 		vstg_buf.unmap();
 
 		data = istg_buf.map();
-		memcpy(data, indices.data(), sizeof(uint16)*indices.size());
+		memcpy(data, indices.data(), sizeof(uint32)*indices.size());
 		istg_buf.unmap();
 
 		vbuf = unique_ptr<buffer>(new buffer(&dev, sizeof(vertex)*vertices.size(), 
 			vk::BufferUsageFlagBits::eVertexBuffer | vk::BufferUsageFlagBits::eTransferDst,
 			vk::MemoryPropertyFlagBits::eDeviceLocal));
-		ibuf = unique_ptr<buffer>(new buffer(&dev, sizeof(uint16)*indices.size(), 
+		ibuf = unique_ptr<buffer>(new buffer(&dev, sizeof(uint32)*indices.size(), 
 			vk::BufferUsageFlagBits::eIndexBuffer | vk::BufferUsageFlagBits::eTransferDst,
 			vk::MemoryPropertyFlagBits::eDeviceLocal));
 
 		cb->copyBuffer(vstg_buf, vbuf->operator vk::Buffer(), { vk::BufferCopy{0,0,sizeof(vertex)*vertices.size()} });
-		cb->copyBuffer(istg_buf, ibuf->operator vk::Buffer(), { vk::BufferCopy{0,0,sizeof(uint16)*indices.size()} });
+		cb->copyBuffer(istg_buf, ibuf->operator vk::Buffer(), { vk::BufferCopy{0,0,sizeof(uint32)*indices.size()} });
 #pragma endregion
 
 #pragma region create texture
@@ -174,17 +215,27 @@ struct test_app : public app {
 	}
 
 	void create_swapchain_resources() {
-		vk::AttachmentDescription color_attachment{ vk::AttachmentDescriptionFlags(),
+		vector<vk::AttachmentDescription> attachments = {
+			{ vk::AttachmentDescriptionFlags(), //color
 						swch.format, vk::SampleCountFlagBits::e1, vk::AttachmentLoadOp::eClear, vk::AttachmentStoreOp::eStore,
 						vk::AttachmentLoadOp::eDontCare, vk::AttachmentStoreOp::eDontCare,
-						vk::ImageLayout::eUndefined, vk::ImageLayout::ePresentSrcKHR };
+						vk::ImageLayout::eUndefined, vk::ImageLayout::ePresentSrcKHR },
+			{ vk::AttachmentDescriptionFlags(), //depth
+						vk::Format::eD32Sfloat, vk::SampleCountFlagBits::e1, vk::AttachmentLoadOp::eClear, vk::AttachmentStoreOp::eDontCare,
+						vk::AttachmentLoadOp::eDontCare, vk::AttachmentStoreOp::eDontCare,
+						vk::ImageLayout::eUndefined, vk::ImageLayout::eDepthStencilAttachmentOptimal }
+		};
 		vk::AttachmentReference col_ref{ 0, vk::ImageLayout::eColorAttachmentOptimal };
-		vk::SubpassDependency dpnd{ VK_SUBPASS_EXTERNAL, 0, vk::PipelineStageFlagBits::eColorAttachmentOutput,
-			vk::PipelineStageFlagBits::eColorAttachmentOutput, vk::AccessFlagBits::eColorAttachmentRead, vk::AccessFlagBits::eColorAttachmentRead | vk::AccessFlagBits::eColorAttachmentWrite,
-		vk::DependencyFlags() };
+		vk::AttachmentReference dep_ref{ 1, vk::ImageLayout::eDepthStencilAttachmentOptimal };
+		vector<vk::SubpassDependency> dpnd = { 
+			{	VK_SUBPASS_EXTERNAL, 0, vk::PipelineStageFlagBits::eColorAttachmentOutput, vk::PipelineStageFlagBits::eColorAttachmentOutput,
+				vk::AccessFlagBits::eColorAttachmentRead, vk::AccessFlagBits::eColorAttachmentRead | vk::AccessFlagBits::eColorAttachmentWrite, vk::DependencyFlags() },
+		};
 
-		vk::SubpassDescription subpass{ vk::SubpassDescriptionFlags(), vk::PipelineBindPoint::eGraphics, 0, nullptr, 1, &col_ref };
-		vk::RenderPassCreateInfo rpcfo{ vk::RenderPassCreateFlags(), 1, &color_attachment, 1, &subpass, 1, &dpnd };
+		vk::SubpassDescription subpass{ vk::SubpassDescriptionFlags(),
+			vk::PipelineBindPoint::eGraphics, 0, nullptr, 1, &col_ref, nullptr, &dep_ref };
+		vk::RenderPassCreateInfo rpcfo{ vk::RenderPassCreateFlags(), 
+			attachments.size(), attachments.data(), 1, &subpass, dpnd.size(), dpnd.data() };
 		rnp = dev.dev->createRenderPassUnique(rpcfo);
 		
 
@@ -247,6 +298,14 @@ struct test_app : public app {
 		rasterizer.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
 		rasterizer.depthBiasEnable = VK_FALSE;
 
+		VkPipelineDepthStencilStateCreateInfo depthStencil = {};
+		depthStencil.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
+		depthStencil.depthTestEnable = VK_TRUE;
+		depthStencil.depthWriteEnable = VK_TRUE;
+		depthStencil.depthCompareOp = VK_COMPARE_OP_LESS;
+		depthStencil.depthBoundsTestEnable = VK_FALSE;
+		depthStencil.stencilTestEnable = VK_FALSE;
+
 		VkPipelineMultisampleStateCreateInfo multisampling = {};
 		multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
 		multisampling.sampleShadingEnable = VK_FALSE;
@@ -276,6 +335,7 @@ struct test_app : public app {
 		pipelineInfo.pViewportState = &viewportState;
 		pipelineInfo.pRasterizationState = &rasterizer;
 		pipelineInfo.pMultisampleState = &multisampling;
+		pipelineInfo.pDepthStencilState = &depthStencil;
 		pipelineInfo.pColorBlendState = &colorBlending;
 		pipelineInfo.layout = (VkPipelineLayout)layout.get();
 		pipelineInfo.renderPass = (VkRenderPass)rnp.get();
@@ -285,25 +345,18 @@ struct test_app : public app {
 		pp = dev.dev->createGraphicsPipelineUnique(VK_NULL_HANDLE, pipelineInfo);
 #pragma endregion
 
-		framebuffers.resize(swch.image_views.size());
-		for (size_t i = 0; i < swch.image_views.size(); ++i) {
-			vk::ImageView att[] = {
-				swch.image_views[i].get()
-			};
-			framebuffers[i] = dev.dev->createFramebufferUnique(vk::FramebufferCreateInfo { 
-				vk::FramebufferCreateFlags(),
-				rnp.get(), 1, att,
-				swch.extent.width, swch.extent.height, 1 });
-		}
+		framebuffers = swch.create_framebuffers(rnp.get());
 
 		cmd_bufs = dev.alloc_cmd_buffers(framebuffers.size());
 		for (size_t i = 0; i < cmd_bufs.size(); ++i) {
 			cmd_bufs[i]->begin(vk::CommandBufferBeginInfo{ vk::CommandBufferUsageFlagBits::eSimultaneousUse });
 
-			vk::ClearValue cc;
-			cc.color = vk::ClearColorValue{ array<float,4>{0.1f, 0.1f, 0.1f, 1.f} };
+			vk::ClearValue cc[] = {
+				vk::ClearColorValue{ array<float,4>{0.1f, 0.1f, 0.1f, 1.f} },
+				vk::ClearDepthStencilValue{1.f, 0}
+			};
 			auto rbio = vk::RenderPassBeginInfo{ rnp.get(), framebuffers[i].get(),
-				vk::Rect2D(vk::Offset2D(), swch.extent), 1, &cc };
+				vk::Rect2D(vk::Offset2D(), swch.extent), 2, cc };
 			cmd_bufs[i]->beginRenderPass(rbio, vk::SubpassContents::eInline);
 
 			cmd_bufs[i]->bindPipeline(vk::PipelineBindPoint::eGraphics, pp.get());
@@ -312,9 +365,9 @@ struct test_app : public app {
 			vk::Buffer bufs[] = { vk::Buffer(vbuf->buf) };
 			vk::DeviceSize offsets[] = { 0 };
 			cmd_bufs[i]->bindVertexBuffers(0, 1, bufs, offsets);
-			cmd_bufs[i]->bindIndexBuffer(ibuf->operator vk::Buffer(), 0, vk::IndexType::eUint16);
+			cmd_bufs[i]->bindIndexBuffer(ibuf->operator vk::Buffer(), 0, vk::IndexType::eUint32);
 
-			cmd_bufs[i]->drawIndexed(12, 1, 0, 0, 0);
+			cmd_bufs[i]->drawIndexed(index_count, 1, 0, 0, 0);
 
 			cmd_bufs[i]->endRenderPass();
 			cmd_bufs[i]->end();
@@ -325,8 +378,8 @@ struct test_app : public app {
 		auto proj = perspective(pi<float>() / 2.f, swch.extent.width / (float)swch.extent.height, 0.1f, 10.f);
 		proj[1][1] *= -1; //hack to flip Y axis
 		ubuf_data->view_proj = proj
-			* lookAt(vec3(2.f,2.f,2.f), vec3(0.f, 0.f, 0.f), vec3(0.f, 0.f, 1.f));
-		ubuf_data->model = rotate(mat4(1), t, vec3(0.f, 0.2f, 1.f));
+			* lookAt(vec3(0.f,1.f,2.f), vec3(0.f, 0.f, 0.f), vec3(0.f, 0.f, 1.f));
+		ubuf_data->model = rotate(mat4(1), t*2.f, vec3(1.0f, 0.4f, .0f));
 	}
 	void recreate_swapchain() {
 		for (auto& fb : framebuffers) fb.reset();
@@ -334,14 +387,14 @@ struct test_app : public app {
 		pp.reset();
 		//layout.reset();
 		//rnp.reset();
-		swch.recreate(this, &dev);
+		swch.recreate(this);
 		create_swapchain_resources();
 	}
 	void resize() override {
 		recreate_swapchain();
 	}
 	void render(float t, float dt) override {
-		auto img_idx = swch.aquire_next(&dev);
+		auto img_idx = swch.aquire_next();
 		if (!img_idx.ok() && img_idx.err() == vk::Result::eErrorOutOfDateKHR || img_idx.err() == vk::Result::eSuboptimalKHR) {
 			recreate_swapchain();
 			return;
@@ -350,7 +403,7 @@ struct test_app : public app {
 		vk::SubmitInfo sfo{ 1, &swch.image_ava_sp.get(), wait_stages, 1, &cmd_bufs[img_idx].get(), 
 								1, &swch.render_fin_sp.get() };
 		dev.graphics_qu.submit(sfo, VK_NULL_HANDLE);
-		swch.present(&dev, img_idx);
+		swch.present(img_idx);
 	}
 };
 
