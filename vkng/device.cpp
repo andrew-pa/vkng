@@ -42,7 +42,7 @@ namespace vkng {
 		graphics_qu = dev->getQueue(qu_fam.graphics, 0);
 		present_qu = dev->getQueue(qu_fam.present, 0);
 
-		cmdpool = dev->createCommandPoolUnique(vk::CommandPoolCreateInfo{ vk::CommandPoolCreateFlags{}, (uint32_t)qu_fam.graphics });
+		cmdpool = dev->createCommandPoolUnique(vk::CommandPoolCreateInfo{ vk::CommandPoolCreateFlagBits::eResetCommandBuffer, (uint32_t)qu_fam.graphics });
 
 		VmaAllocatorCreateInfo cfo = {};
 		cfo.physicalDevice = (VkPhysicalDevice)pdevice;
@@ -108,7 +108,8 @@ namespace vkng {
 		vmaDestroyBuffer(dev->allocator, buf, alloc);
 	}
 
-	image::image(device * dev, vk::ImageType type, vk::Extent3D size, vk::Format fmt, vk::ImageTiling til, vk::ImageUsageFlags use, vk::MemoryPropertyFlags memuse) :dev(dev) {
+	image::image(device * dev, vk::ImageType type, vk::Extent3D size, vk::Format fmt, vk::ImageTiling til, vk::ImageUsageFlags use, vk::MemoryPropertyFlags memuse,
+			optional<vk::UniqueImageView*> iv, vk::ImageViewType iv_type, vk::ImageSubresourceRange iv_sr) :dev(dev) {
 		VmaMemoryRequirements mreq = {};
 		mreq.requiredFlags = (VkMemoryPropertyFlags)memuse;
 		VmaAllocationInfo alli;
@@ -117,6 +118,11 @@ namespace vkng {
 			vk::SampleCountFlagBits::e1, til, use
 		}, &mreq, &img, &alloc, &alli);
 		assert(res == VK_SUCCESS);
+		if (iv) {
+			**iv = dev->dev->createImageViewUnique(vk::ImageViewCreateInfo(vk::ImageViewCreateFlags(), vk::Image(img),
+				iv_type, fmt,
+				vk::ComponentMapping(), iv_sr));
+		}
 	}
 	image::~image() {
 		vmaDestroyImage(dev->allocator, img, alloc);

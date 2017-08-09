@@ -13,7 +13,7 @@ namespace vkng {
 	void swap_chain::present(uint32_t index) {
 		vk::PresentInfoKHR ifo{1, &render_fin_sp.get(), 1, &sch.get(), &index};
 		dev->present_qu.presentKHR(ifo);
-		dev->present_qu.waitIdle();
+		dev->present_qu.waitIdle(); //it seems this line isn't stricly necessary?
 	}
 
 	void swap_chain::recreate(app* app) {
@@ -78,8 +78,8 @@ namespace vkng {
 		sch = dev->dev->createSwapchainKHRUnique(cfo);
 
 		images = dev->dev->getSwapchainImagesKHR(sch.get());
-		depth_buf = make_unique<image>(dev, vk::ImageType::e2D, vk::Extent3D{ extent.width, extent.height, 1 }, vk::Format::eD32Sfloat, vk::ImageTiling::eOptimal, vk::ImageUsageFlagBits::eDepthStencilAttachment, 
-			vk::MemoryPropertyFlagBits::eDeviceLocal);
+		depth_buf = make_unique<image>(dev, vk::ImageType::e2D, vk::Extent3D{ extent.width, extent.height, 1 }, vk::Format::eD32Sfloat, vk::ImageTiling::eOptimal,
+			vk::ImageUsageFlagBits::eDepthStencilAttachment, vk::MemoryPropertyFlagBits::eDeviceLocal);
 		auto tbf = move(dev->alloc_cmd_buffers()[0]);
 		tbf->begin(&vk::CommandBufferBeginInfo(vk::CommandBufferUsageFlagBits::eOneTimeSubmit));
 		auto subresrange = vk::ImageSubresourceRange{ vk::ImageAspectFlagBits::eDepth, 0,1,0,1 };

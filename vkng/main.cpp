@@ -8,6 +8,20 @@ using namespace vkng;
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 
+/*
+	PLAN
+	
+	Refacter some of the pipeline/render pass creation code, could be more generalized?
+	Deferred Renderer
+		G-Buffer
+		Directional Lights/Nice Physically Based shading/Postprocess
+		Shadows?
+		Points lights?
+	Voxels? Load scripts -> a scene? some gameplay...?
+*/
+
+
+
 struct vertex {
 	vec3 pos;
 	vec2 tex;
@@ -83,7 +97,7 @@ struct test_app : public app {
 	vk::UniquePipelineLayout layout;
 	vk::UniqueRenderPass rnp;
 	vk::UniquePipeline pp;
-	shader_cashe shc;
+	shader_cache shc;
 
 	vk::UniqueDescriptorPool descpool;
 	vk::UniqueDescriptorSetLayout descset_layout;
@@ -151,10 +165,10 @@ struct test_app : public app {
 		memcpy(data, img, img_size);
 		imgsb.unmap();
 
-		tex = make_unique<image>(&dev, vk::ImageType::e2D, vk::Extent3D(w, h, 1), vk::Format::eR8G8B8A8Unorm, vk::ImageTiling::eOptimal, 
-			vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eSampled, vk::MemoryPropertyFlagBits::eDeviceLocal);
-
 		auto subresrange = vk::ImageSubresourceRange{ vk::ImageAspectFlagBits::eColor, 0,1,0,1 };
+		tex = make_unique<image>(&dev, vk::ImageType::e2D, vk::Extent3D(w, h, 1), vk::Format::eR8G8B8A8Unorm, vk::ImageTiling::eOptimal, 
+			vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eSampled, vk::MemoryPropertyFlagBits::eDeviceLocal, &tex_view, vk::ImageViewType::e2D, subresrange);
+
 		cb->pipelineBarrier(vk::PipelineStageFlagBits::eTopOfPipe, vk::PipelineStageFlagBits::eTopOfPipe, vk::DependencyFlags(), {}, {}, {
 			vk::ImageMemoryBarrier{vk::AccessFlags(), vk::AccessFlagBits::eTransferWrite, vk::ImageLayout::eUndefined, vk::ImageLayout::eTransferDstOptimal, 
 				VK_QUEUE_FAMILY_IGNORED, VK_QUEUE_FAMILY_IGNORED, tex->operator vk::Image(), subresrange}
@@ -176,15 +190,10 @@ struct test_app : public app {
 		ubuf = make_unique<buffer>(&dev, sizeof(cam_uni_buf), vk::BufferUsageFlagBits::eUniformBuffer,
 			vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent, make_optional((void**)&ubuf_data));
 
-		tex_view = dev.dev->createImageViewUnique(vk::ImageViewCreateInfo{ vk::ImageViewCreateFlags(), tex->operator vk::Image(), vk::ImageViewType::e2D,
-			vk::Format::eR8G8B8A8Unorm, vk::ComponentMapping(), subresrange });
-
 		samp = dev.dev->createSamplerUnique(vk::SamplerCreateInfo{
 			vk::SamplerCreateFlags(), vk::Filter::eLinear, vk::Filter::eLinear, vk::SamplerMipmapMode::eNearest, vk::SamplerAddressMode::eRepeat,
 			vk::SamplerAddressMode::eRepeat, vk::SamplerAddressMode::eRepeat, 0.f, VK_TRUE, 16.f
 		});
-
-
 
 		vector<vk::DescriptorPoolSize> pool_sizes = {
 			{ vk::DescriptorType::eUniformBuffer, 1 },

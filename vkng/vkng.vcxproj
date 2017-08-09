@@ -130,11 +130,13 @@
     <ClCompile Include="device.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="pipeline.cpp" />
+    <ClCompile Include="renderer.cpp" />
     <ClCompile Include="swap_chain.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="app.h" />
     <ClInclude Include="cmmn.h" />
+    <ClInclude Include="renderer.h" />
     <ClInclude Include="device.h" />
     <ClInclude Include="pipeline.h" />
     <ClInclude Include="stb_image.h" />

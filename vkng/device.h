@@ -8,6 +8,7 @@ namespace vkng {
 		struct device* dev;
 		VkBuffer buf;
 		VmaAllocation alloc;
+		buffer() {}
 		buffer(device* dev, vk::DeviceSize size, vk::BufferUsageFlags bufuse, vk::MemoryPropertyFlags memuse, 
 			optional<void**> persistant_map = {});
 
@@ -24,7 +25,9 @@ namespace vkng {
 		struct device* dev;
 		VkImage img;
 		VmaAllocation alloc;
-		image(device* dev, vk::ImageType type, vk::Extent3D size, vk::Format fmt, vk::ImageTiling til, vk::ImageUsageFlags use, vk::MemoryPropertyFlags memuse);
+		image(device* dev, vk::ImageType type, vk::Extent3D size, vk::Format fmt,
+			vk::ImageTiling til, vk::ImageUsageFlags use, vk::MemoryPropertyFlags memuse,
+			optional<vk::UniqueImageView*> iv = {}, vk::ImageViewType iv_type = {}, vk::ImageSubresourceRange iv_sr = {});
 
 		operator vk::Image() {
 			return vk::Image(img);

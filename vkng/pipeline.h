@@ -4,11 +4,11 @@
 
 namespace vkng {
 
-	class shader_cashe {
+	class shader_cache {
 		map<string, vk::UniqueShaderModule> shaders;
 		device* dev; //this device must live at least as long as the shader_cache, RIP no Rust 😟
 	public:
-		shader_cashe(device* dev) : dev(dev) {}
+		shader_cache(device* dev) : dev(dev) {}
 
 		vk::ShaderModule load_shader(const string& path) {
 			auto f = shaders.find(path);
