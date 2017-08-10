@@ -16,18 +16,24 @@ void DestroyDebugReportCallbackEXT(VkInstance instance, VkDebugReportCallbackEXT
     }
 }
 static VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(
-		VkDebugReportFlagsEXT flags,
-		VkDebugReportObjectTypeEXT objType,
-		uint64_t obj,
-		size_t location,
-		int32_t code,
-		const char* layerPrefix,
-		const char* msg,
-		void* userData)
-	{
-		std::cout << "validation layer " << layerPrefix << " @ " << location << ": " << msg << std::endl;
-		return VK_FALSE;
-	}
+	VkDebugReportFlagsEXT flags,
+	VkDebugReportObjectTypeEXT objType,
+	uint64_t obj,
+	size_t location,
+	int32_t code,
+	const char* layerPrefix,
+	const char* msg,
+	void* userData)
+{
+	vk::DebugReportFlagsEXT flg{ (vk::DebugReportFlagBitsEXT)flags };
+	if (flg & vk::DebugReportFlagBitsEXT::eDebug) std::cout << "[DEBUG]";
+	else if (flg & vk::DebugReportFlagBitsEXT::eError) std::cout << "[ERROR]";
+	else if (flg & vk::DebugReportFlagBitsEXT::eInformation) std::cout << "[INFO]";
+	else if (flg & vk::DebugReportFlagBitsEXT::ePerformanceWarning) std::cout << "[PERF]";
+	else if (flg & vk::DebugReportFlagBitsEXT::eWarning) std::cout << "[WARN]";
+	std::cout << " validation layer " << layerPrefix << " @ " << location << ": " << msg << std::endl;
+	return VK_FALSE;
+}
 namespace vkng
 {
 	
@@ -126,7 +132,7 @@ namespace vkng
 		instance = vk::createInstance(icfo);
 
 		CreateDebugReportCallbackEXT((VkInstance)instance, (VkDebugReportCallbackCreateInfoEXT*)&vk::DebugReportCallbackCreateInfoEXT{
-			vk::DebugReportFlagsEXT(),
+			vk::DebugReportFlagBitsEXT::eError | vk::DebugReportFlagBitsEXT::eDebug | vk::DebugReportFlagBitsEXT::ePerformanceWarning | vk::DebugReportFlagBitsEXT::eWarning,
 			debugCallback
 		}, nullptr, &report_callback);
 		

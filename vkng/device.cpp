@@ -37,6 +37,11 @@ namespace vkng {
 		};
 		dcfo.enabledLayerCount = layer_names.size();
 		dcfo.ppEnabledLayerNames = layer_names.data();
+		vector<const char*> ext = {
+			VK_KHR_SWAPCHAIN_EXTENSION_NAME
+		};
+		dcfo.enabledExtensionCount = ext.size();
+		dcfo.ppEnabledExtensionNames = ext.data();
 		dev = pdevice.createDeviceUnique(dcfo);
 
 		graphics_qu = dev->getQueue(qu_fam.graphics, 0);
