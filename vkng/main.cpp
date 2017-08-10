@@ -3,6 +3,7 @@
 #include "device.h"
 #include "swap_chain.h"
 #include "pipeline.h"
+#include "renderer.h"
 using namespace vkng;
 
 #define STB_IMAGE_IMPLEMENTATION
@@ -19,24 +20,6 @@ using namespace vkng;
 		Points lights?
 	Voxels? Load scripts -> a scene? some gameplay...?
 */
-
-
-
-struct vertex {
-	vec3 pos;
-	vec2 tex;
-
-	static vk::VertexInputBindingDescription binding_desc() {
-		return vk::VertexInputBindingDescription{ 0, sizeof(vertex) };
-	}
-
-	static array<vk::VertexInputAttributeDescription,2> attrib_desc() {
-		return {
-			vk::VertexInputAttributeDescription{0, 0, vk::Format::eR32G32B32Sfloat, offsetof(vertex, pos)},
-			vk::VertexInputAttributeDescription{1, 0, vk::Format::eR32G32Sfloat, offsetof(vertex, tex)},
-		};
-	}
-};
 
 void generate_torus(vec2 r, int div, function<void(vec3, vec3, vec3, vec2)> vertex, function<void(size_t)> index)
 {
@@ -87,10 +70,28 @@ void generate_torus(vec2 r, int div, function<void(vec3, vec3, vec3, vec2)> vert
 	}
 }
 
+
+
+
+struct vertex {
+	vec3 pos;
+	vec2 tex;
+
+	static vk::VertexInputBindingDescription binding_desc() {
+		return vk::VertexInputBindingDescription{ 0, sizeof(vertex) };
+	}
+
+	static array<vk::VertexInputAttributeDescription,2> attrib_desc() {
+		return {
+			vk::VertexInputAttributeDescription{0, 0, vk::Format::eR32G32B32Sfloat, offsetof(vertex, pos)},
+			vk::VertexInputAttributeDescription{1, 0, vk::Format::eR32G32Sfloat, offsetof(vertex, tex)},
+		};
+	}
+};
 struct cam_uni_buf {
 	mat4 model, view_proj;
 };
-
+/*
 struct test_app : public app {
 	device dev;
 	swap_chain swch;
@@ -413,6 +414,94 @@ struct test_app : public app {
 								1, &swch.render_fin_sp.get() };
 		dev.graphics_qu.submit(sfo, VK_NULL_HANDLE);
 		swch.present(img_idx);
+	}
+};*/
+
+struct test_app : public app {
+	device dev; swap_chain swp; shader_cache shc;
+	unique_ptr<renderer::renderer> rndr;
+	unique_ptr<image> tex;
+	vk::UniqueImageView tex_view;
+
+	test_app() :
+		app("Vulkan Engine", vec2(1280, 960)),
+		dev(this), swp(this, &dev),
+		shc(&dev)
+	{
+		vector<renderer::vertex> vertices;
+		vector<uint32> indices;
+		generate_torus(vec2(1.f, 0.5f), 32, [&vertices](auto p, auto n, auto tg, auto tx) {
+			vertices.push_back({ p,n,tg,tx });
+		}, [&indices](auto ix) { indices.push_back(ix); });
+		
+		int w, h, ch;
+		auto img = stbi_load("C:\\Users\\andre\\Source\\vkng\\vkng\\tex.png", &w, &h, &ch, STBI_rgb_alpha);
+		vk::DeviceSize img_size = w*h * 4;
+
+		auto imgsb = buffer(&dev, img_size, vk::BufferUsageFlagBits::eTransferSrc, vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
+		auto data = imgsb.map();
+		memcpy(data, img, img_size);
+		imgsb.unmap();
+
+		auto subresrange = vk::ImageSubresourceRange{ vk::ImageAspectFlagBits::eColor, 0,1,0,1 };
+		tex = make_unique<image>(&dev, vk::ImageType::e2D, vk::Extent3D(w, h, 1), vk::Format::eR8G8B8A8Unorm, vk::ImageTiling::eOptimal, 
+			vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eSampled, vk::MemoryPropertyFlagBits::eDeviceLocal,
+			&tex_view, vk::ImageViewType::e2D, subresrange);
+
+		auto cb = move(dev.alloc_cmd_buffers()[0]);
+		cb->begin(vk::CommandBufferBeginInfo{ vk::CommandBufferUsageFlagBits::eOneTimeSubmit });
+		cb->pipelineBarrier(vk::PipelineStageFlagBits::eTopOfPipe, vk::PipelineStageFlagBits::eTopOfPipe, vk::DependencyFlags(), {}, {}, {
+			vk::ImageMemoryBarrier{vk::AccessFlags(), vk::AccessFlagBits::eTransferWrite, vk::ImageLayout::eUndefined, vk::ImageLayout::eTransferDstOptimal, 
+				VK_QUEUE_FAMILY_IGNORED, VK_QUEUE_FAMILY_IGNORED, tex->operator vk::Image(), subresrange}
+		});
+
+		cb->copyBufferToImage(imgsb, tex->operator vk::Image(), vk::ImageLayout::eTransferDstOptimal, {
+			vk::BufferImageCopy{0, 0, 0, vk::ImageSubresourceLayers{vk::ImageAspectFlagBits::eColor, 0, 0, 1}, {0,0,0}, {(uint32_t)w,(uint32_t)h,1}}
+		});
+		
+		cb->pipelineBarrier(vk::PipelineStageFlagBits::eTopOfPipe, vk::PipelineStageFlagBits::eTopOfPipe, vk::DependencyFlags(), {}, {}, {
+			vk::ImageMemoryBarrier{vk::AccessFlagBits::eTransferWrite, vk::AccessFlagBits::eShaderRead, vk::ImageLayout::eTransferDstOptimal, vk::ImageLayout::eShaderReadOnlyOptimal, 
+				VK_QUEUE_FAMILY_IGNORED, VK_QUEUE_FAMILY_IGNORED, tex->operator vk::Image(), subresrange}
+		});
+		cb->end();
+		dev.graphics_qu.submit({ vk::SubmitInfo{0, nullptr, nullptr, 1, &cb.get()} }, nullptr); // start actually copying stuff while we create everything else
+		
+		vector<renderer::object_desc> objects;
+		objects.push_back({ &vertices, &indices, mat4(1), tex_view.get() });
+		objects.push_back({ &vertices, &indices, mat4(1), tex_view.get() });
+		objects.push_back({ &vertices, &indices, mat4(1), tex_view.get() });
+		objects.push_back({ &vertices, &indices, mat4(1), tex_view.get() });
+		objects.push_back({ &vertices, &indices, mat4(1), tex_view.get() });
+		rndr = make_unique<renderer::renderer>(&dev, &swp, &shc, objects);
+		rndr->cam.pos = vec3(2.f, 1.f, -5.f);
+	}
+
+	void update(float t, float dt) override {
+		for (int i = 0; i < 5; ++i) {
+			*rndr->objects[i].transform = translate(rotate(mat4(1), t*2.f, vec3(0.2f, 0.6f, 0.4f)),
+				vec3( i*3.f - 6.f, 0.f, 0.f));
+		}
+	}
+	void resize() override {
+		rndr->reset();
+		swp.recreate(this);
+		rndr->recreate(&swp);
+	}
+	void render(float t, float dt) override {
+		auto img_idx = swp.aquire_next();
+		if (!img_idx.ok() && img_idx.err() == vk::Result::eErrorOutOfDateKHR || img_idx.err() == vk::Result::eSuboptimalKHR) {
+			resize();
+			return;
+		}
+
+		auto cb = rndr->render(img_idx);
+
+		vk::PipelineStageFlags wait_stages[] = { vk::PipelineStageFlagBits::eColorAttachmentOutput };
+		vk::SubmitInfo sfo{ 1, &swp.image_ava_sp.get(), wait_stages, 1, &cb, 
+								1, &swp.render_fin_sp.get() };
+		dev.graphics_qu.submit(sfo, VK_NULL_HANDLE);
+		swp.present(img_idx);
+	
 	}
 };
 
