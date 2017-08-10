@@ -5,7 +5,7 @@ namespace vkng {
 		renderer::renderer(device* dev, swap_chain* swch, shader_cache* shc, const vector<object_desc>& od) : dev(dev), shc(shc) {
 			objects.resize(od.size());
 
-			//create buffers
+			//count objects to ascertain resource requirements
 			size_t total_vertices = 0, total_indices = 0;
 			for (size_t i = 0; i < objects.size(); ++i) {
 				total_vertices += od[i].vertices->size();
@@ -14,30 +14,31 @@ namespace vkng {
 			total_vertices *= sizeof(vertex);
 			total_indices *= sizeof(uint32);
 
+			//create buffers
 			// - create staging buffer
 			auto stg_buf = buffer(dev, total_vertices + total_indices, vk::BufferUsageFlagBits::eTransferSrc,
-				vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCached);
+				vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
 
 			// - copy data into staging buffer from RAM
 			auto data = (char*)stg_buf.map();
-			size_t voffset = 0, ioffset = total_vertices;
+			size_t voffset = 0, ioffset = 0;
 			for (size_t i = 0; i < objects.size(); ++i) {
 				objects[i].vertex_offset = voffset;
 				memcpy(data + voffset, od[i].vertices->data(), sizeof(vertex)*od[i].vertices->size());
 				voffset += sizeof(vertex)*od[i].vertices->size();
 
 				objects[i].index_offset = ioffset;
-				memcpy(data + ioffset, od[i].indices->data(), sizeof(uint32)*od[i].indices->size());
+				memcpy(data + total_vertices + ioffset, od[i].indices->data(), sizeof(uint32)*od[i].indices->size());
 				ioffset += sizeof(uint32)*od[i].indices->size();
 			}
 			stg_buf.unmap();
 
 			// - create vertex/index buffers
 			vxbuf = make_unique<buffer>(dev, total_vertices,
-				vk::BufferUsageFlagBits::eVertexBuffer | vk::BufferUsageFlagBits::eTransferSrc,
+				vk::BufferUsageFlagBits::eVertexBuffer | vk::BufferUsageFlagBits::eTransferDst,
 				vk::MemoryPropertyFlagBits::eDeviceLocal);
 			ixbuf = make_unique<buffer>(dev, total_indices,
-				vk::BufferUsageFlagBits::eVertexBuffer | vk::BufferUsageFlagBits::eTransferSrc,
+				vk::BufferUsageFlagBits::eIndexBuffer | vk::BufferUsageFlagBits::eTransferDst,
 				vk::MemoryPropertyFlagBits::eDeviceLocal);
 
 			// - create command buffer to copy from staging ⇒ vertex/index buffers
@@ -50,40 +51,53 @@ namespace vkng {
 			scb->end();
 			dev->graphics_qu.submit({ vk::SubmitInfo{0, nullptr, nullptr, 1, &scb.get()} }, nullptr); // start actually copying stuff while we create everything else
 
-			//create samplers — one day
+			//create samplers
+			fsmp = dev->dev->createSamplerUnique(vk::SamplerCreateInfo{
+					vk::SamplerCreateFlags(), vk::Filter::eLinear, vk::Filter::eLinear, vk::SamplerMipmapMode::eNearest, vk::SamplerAddressMode::eRepeat,
+					vk::SamplerAddressMode::eRepeat, vk::SamplerAddressMode::eRepeat, 0.f, VK_TRUE, 16.f
+			});
 
 			//create uniform buffer
-			ubuf = make_unique<buffer>(dev, sizeof(mat4)*objects.size(), vk::BufferUsageFlagBits::eUniformBuffer,
+			vk::PhysicalDeviceProperties props;
+			dev->pdevice.getProperties(&props); // query for how close together we can put the buffers
+			auto ubuf_aligned_size = props.limits.minUniformBufferOffsetAlignment;
+
+			ubuf = make_unique<buffer>(dev, ubuf_aligned_size*objects.size(), vk::BufferUsageFlagBits::eUniformBuffer,
 				vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
 				make_optional((void**)&ubuf_map));
 
 			//create descriptor stuff for objects
 			// - pool
 			vk::DescriptorPoolSize pool_sizes[] = {
-				{ vk::DescriptorType::eUniformBuffer, 1 },
-				//{ vk::DescriptorType::eCombinedImageSampler, 1 },
+				{ vk::DescriptorType::eUniformBuffer, objects.size() },
+				{ vk::DescriptorType::eCombinedImageSampler, objects.size() },
 			};
 			obj_desc_pool = dev->dev->createDescriptorPoolUnique(vk::DescriptorPoolCreateInfo{
-				vk::DescriptorPoolCreateFlags(), objects.size(), 1, pool_sizes
+				vk::DescriptorPoolCreateFlags(), objects.size(), 2, pool_sizes
 			});
 			// - layout
 			obj_desc_layout = dev->create_desc_set_layout({
 				vk::DescriptorSetLayoutBinding{0, vk::DescriptorType::eUniformBuffer, 1, vk::ShaderStageFlagBits::eVertex},
-				//vk::DescriptorSetLayoutBinding{1, vk::DescriptorType::eSampler, 1, vk::ShaderStageFlagBits::eFragment}
+				vk::DescriptorSetLayoutBinding{1, vk::DescriptorType::eCombinedImageSampler, 1, vk::ShaderStageFlagBits::eFragment}
 			});
 			// - sets
-			vk::DescriptorSetLayout layouts[] = { obj_desc_layout.get() };
+			vector<vk::DescriptorSetLayout> layouts(objects.size(), obj_desc_layout.get());
 			auto sets = dev->dev->allocateDescriptorSetsUnique(vk::DescriptorSetAllocateInfo{
-				obj_desc_pool.get(), objects.size(), layouts
+				obj_desc_pool.get(), objects.size(), layouts.data()
 			});
 			vector<vk::DescriptorBufferInfo> ubuf_ifo(objects.size());
-			vector<vk::WriteDescriptorSet> writes(objects.size());
+			vector<vk::DescriptorImageInfo> dftx_ifo(objects.size());
+			vector<vk::WriteDescriptorSet> writes;
 			for (size_t i = 0; i < objects.size(); ++i) {
-				objects[i].transform = ((mat4*)ubuf_map) + i;
+				objects[i].transform = (mat4*)(((char*)ubuf_map) + i*ubuf_aligned_size);
+				*objects[i].transform = od[i].transform;
 				objects[i].descriptor_set = move(sets[i]);
-				ubuf_ifo[i] = vk::DescriptorBufferInfo{ ubuf->operator vk::Buffer(), sizeof(mat4)*i, sizeof(mat4) };
-				writes[i] = vk::WriteDescriptorSet{ objects[i].descriptor_set.get(), 0, 0, 1,
-					vk::DescriptorType::eUniformBuffer, nullptr, &ubuf_ifo[i] };
+				ubuf_ifo[i] = vk::DescriptorBufferInfo{ ubuf->operator vk::Buffer(), i*ubuf_aligned_size, sizeof(mat4) };
+				writes.push_back(vk::WriteDescriptorSet{ objects[i].descriptor_set.get(), 0, 0, 1,
+					vk::DescriptorType::eUniformBuffer, nullptr, &ubuf_ifo[i] });
+				dftx_ifo[i] = vk::DescriptorImageInfo{ fsmp.get(), od[i].diffuse_texture, vk::ImageLayout::eShaderReadOnlyOptimal };
+				writes.push_back(vk::WriteDescriptorSet{ objects[i].descriptor_set.get(), 1, 0, 1,
+					vk::DescriptorType::eCombinedImageSampler, &dftx_ifo[i] });
 			}
 			dev->dev->updateDescriptorSets(writes, {});
 
@@ -229,13 +243,17 @@ namespace vkng {
 			cmd_bufs = dev->alloc_cmd_buffers(swch->images.size());
 			sw_fb = swch->create_framebuffers(smp_rp.get());
 			extent = swch->extent;
+
+			cam.update_proj(extent);
 		}
 
-		void renderer::recreate(swap_chain* swch) {
+		void renderer::reset() {
 			//release swap chain resources
 			cmd_bufs.clear();
 			sw_fb.clear();
 			smp_pl.reset();
+		}
+		void renderer::recreate(swap_chain* swch) {
 			//recreate them
 			create(swch);
 		}
@@ -253,9 +271,7 @@ namespace vkng {
 
 			cb->bindPipeline(vk::PipelineBindPoint::eGraphics, smp_pl.get());
 
-			cb->pushConstants(smp_pl_layout.get(), vk::ShaderStageFlagBits::eVertex, 0, {
-				cam->proj*cam->view
-			});
+			cb->pushConstants<mat4>(smp_pl_layout.get(), vk::ShaderStageFlagBits::eVertex, 0, { cam.view_proj() });
 
 			vk::Buffer bufs[] = { vxbuf->operator vk::Buffer() };
 			for (const auto& o : objects) {
