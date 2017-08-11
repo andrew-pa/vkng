@@ -9,6 +9,10 @@ using namespace vkng;
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 
+#include <assimp\Importer.hpp>
+#include <assimp\scene.h>
+#include <assimp\postprocess.h>
+
 /*
 	PLAN
 	
@@ -71,9 +75,18 @@ void generate_torus(vec2 r, int div, function<void(vec3, vec3, vec3, vec2)> vert
 }
 
 
+inline vec3 conv(aiVector3D v) {
+	return vec3(v.x, v.y, v.z);
+}
+inline mat4 conv(aiMatrix4x4 v) {
+	return transpose(mat4(v.a1, v.a2, v.a3, v.a4,
+		v.b1, v.b2, v.b3, v.b4,
+		v.c1, v.c2, v.c3, v.c4,
+		v.d1, v.d2, v.d3, v.d4));
+}
 
 
-struct vertex {
+/*struct vertex {
 	vec3 pos;
 	vec2 tex;
 
@@ -91,7 +104,6 @@ struct vertex {
 struct cam_uni_buf {
 	mat4 model, view_proj;
 };
-/*
 struct test_app : public app {
 	device dev;
 	swap_chain swch;
@@ -422,11 +434,16 @@ struct test_app : public app {
 	unique_ptr<renderer::renderer> rndr;
 	unique_ptr<image> tex;
 	vk::UniqueImageView tex_view;
+	perspective_camera cam;
+	fps_camera_controller ctrl;
 
 	test_app() :
 		app("Vulkan Engine", vec2(1280, 960)),
 		dev(this), swp(this, &dev),
-		shc(&dev)
+		shc(&dev),
+		cam(vec2(1280, 960), vec3(0.f, 5.f, 5.f), vec3(0.f), vec3(0.f, 1.f, 0.f), 
+			pi<float>()/3.f, 1.f, 3500.f),
+		ctrl(cam, vec3(100.f))
 	{
 		vector<renderer::vertex> vertices;
 		vector<uint32> indices;
@@ -467,20 +484,49 @@ struct test_app : public app {
 		dev.graphics_qu.submit({ vk::SubmitInfo{0, nullptr, nullptr, 1, &cb.get()} }, nullptr); // start actually copying stuff while we create everything else
 		
 		vector<renderer::object_desc> objects;
-		objects.push_back({ &vertices, &indices, mat4(1), tex_view.get() });
-		objects.push_back({ &vertices, &indices, mat4(1), tex_view.get() });
-		objects.push_back({ &vertices, &indices, mat4(1), tex_view.get() });
-		objects.push_back({ &vertices, &indices, mat4(1), tex_view.get() });
-		objects.push_back({ &vertices, &indices, mat4(1), tex_view.get() });
-		rndr = make_unique<renderer::renderer>(&dev, &swp, &shc, objects);
-		rndr->cam.pos = vec3(2.f, 1.f, -5.f);
+
+		Assimp::Importer imp;
+		auto scene = imp.ReadFile("C:\\Users\\andre\\Downloads\\3DModels\\sponza\\sponza.obj", aiProcessPreset_TargetRealtime_Fast);
+
+		stack<aiNode*> nodes;
+		nodes.push(scene->mRootNode);
+		while (!nodes.empty()) {
+			auto node = nodes.top(); nodes.pop();
+			for (size_t i = 0; i < node->mNumChildren; ++i) nodes.push(node->mChildren[i]);
+			for (size_t mix = 0; mix < node->mNumMeshes; ++mix) {
+				auto mesh = scene->mMeshes[node->mMeshes[mix]];
+				if (!(mesh->HasPositions() && mesh->HasNormals() && mesh->HasTextureCoords(0) && mesh->HasTangentsAndBitangents())) {
+					cout << "mesh " << mesh->mName.C_Str() << " isn't complete" << endl;
+					continue;
+				}
+				vector<renderer::vertex> vertices; vector<uint32> indices;
+				for (size_t vi = 0; vi < mesh->mNumVertices; ++vi) {
+					vertices.push_back({
+						conv(mesh->mVertices[vi]),
+						conv(mesh->mNormals[vi]),
+						conv(mesh->mTangents[vi]),
+						conv(mesh->mTextureCoords[0][vi])
+					});
+				}
+				for (size_t fi = 0; fi < mesh->mNumFaces; ++fi) {
+					for (size_t ii = 0; ii < mesh->mFaces[fi].mNumIndices; ++ii)
+						indices.push_back(mesh->mFaces[fi].mIndices[ii]);
+				}
+				objects.push_back({ vertices, indices, conv(node->mTransformation), tex_view.get() });
+			}
+		}
+		
+		rndr = make_unique<renderer::renderer>(&dev, &swp, &shc, &cam, objects);
+
+		input_handlers.push_back(&ctrl);
 	}
 
 	void update(float t, float dt) override {
-		for (int i = 0; i < 5; ++i) {
+		/*for (int i = 0; i < 5; ++i) {
 			*rndr->objects[i].transform = translate(rotate(mat4(1), t*2.f, vec3(0.2f, 0.6f, 0.4f)),
 				vec3( i*3.f - 6.f, 0.f, 0.f));
-		}
+		}*/
+		ctrl.update(t, dt);
 	}
 	void resize() override {
 		rndr->reset();
