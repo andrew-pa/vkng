@@ -2,14 +2,14 @@
 
 namespace vkng {
 	namespace renderer {
-		renderer::renderer(device* dev, swap_chain* swch, shader_cache* shc, const vector<object_desc>& od) : dev(dev), shc(shc) {
+		renderer::renderer(device* dev, swap_chain* swch, shader_cache* shc, camera* cam, const vector<object_desc>& od) : dev(dev), shc(shc), cam(cam) {
 			objects.resize(od.size());
 
 			//count objects to ascertain resource requirements
 			size_t total_vertices = 0, total_indices = 0;
 			for (size_t i = 0; i < objects.size(); ++i) {
-				total_vertices += od[i].vertices->size();
-				total_indices += objects[i].index_count = od[i].indices->size();
+				total_vertices += od[i].vertices.size();
+				total_indices += objects[i].index_count = od[i].indices.size();
 			}
 			total_vertices *= sizeof(vertex);
 			total_indices *= sizeof(uint32);
@@ -24,12 +24,12 @@ namespace vkng {
 			size_t voffset = 0, ioffset = 0;
 			for (size_t i = 0; i < objects.size(); ++i) {
 				objects[i].vertex_offset = voffset;
-				memcpy(data + voffset, od[i].vertices->data(), sizeof(vertex)*od[i].vertices->size());
-				voffset += sizeof(vertex)*od[i].vertices->size();
+				memcpy(data + voffset, od[i].vertices.data(), sizeof(vertex)*od[i].vertices.size());
+				voffset += sizeof(vertex)*od[i].vertices.size();
 
 				objects[i].index_offset = ioffset;
-				memcpy(data + total_vertices + ioffset, od[i].indices->data(), sizeof(uint32)*od[i].indices->size());
-				ioffset += sizeof(uint32)*od[i].indices->size();
+				memcpy(data + total_vertices + ioffset, od[i].indices.data(), sizeof(uint32)*od[i].indices.size());
+				ioffset += sizeof(uint32)*od[i].indices.size();
 			}
 			stg_buf.unmap();
 
@@ -244,7 +244,7 @@ namespace vkng {
 			sw_fb = swch->create_framebuffers(smp_rp.get());
 			extent = swch->extent;
 
-			cam.update_proj(extent);
+			cam->update_proj(vec2(extent.width, extent.height));
 		}
 
 		void renderer::reset() {
@@ -271,7 +271,7 @@ namespace vkng {
 
 			cb->bindPipeline(vk::PipelineBindPoint::eGraphics, smp_pl.get());
 
-			cb->pushConstants<mat4>(smp_pl_layout.get(), vk::ShaderStageFlagBits::eVertex, 0, { cam.view_proj() });
+			cb->pushConstants<mat4>(smp_pl_layout.get(), vk::ShaderStageFlagBits::eVertex, 0, { cam->_proj * cam->_view });
 
 			vk::Buffer bufs[] = { vxbuf->operator vk::Buffer() };
 			for (const auto& o : objects) {

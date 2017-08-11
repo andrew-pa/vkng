@@ -3,6 +3,7 @@
 #include "device.h"
 #include "swap_chain.h"
 #include "pipeline.h"
+#include "camera.h"
 
 namespace vkng {
 	/*
@@ -28,8 +29,8 @@ namespace vkng {
 		};
 		
 		struct object_desc {
-			vector<vertex>* vertices;
-			vector<uint32>* indices;
+			vector<vertex> vertices;
+			vector<uint32> indices;
 			mat4 transform;
 			vk::ImageView diffuse_texture;
 		};
@@ -41,19 +42,6 @@ namespace vkng {
 			mat4* transform;
 		};
 
-		struct camera {
-			mat4 proj; vec3 pos, targ, up;
-			mat4 view_proj() {
-				return proj * lookAt(pos, targ, up);
-			}
-
-			void update_proj(vk::Extent2D extent) {
-				proj = perspective(pi<float>() / 2.f, extent.width / (float)extent.height, 0.01f, 1000.f);
-				proj[1][1] *= -1;
-			}
-
-			camera(vec3 p = vec3(0.f, 1.f, 2.f), vec3 t = vec3(0.f), vec3 u = vec3(0.f, 0.f, 1.f)) : pos(p), targ(t), up(u) { }
-		};
 
 		struct renderer {
 			device* dev;
@@ -78,9 +66,9 @@ namespace vkng {
 			vector<vk::UniqueFramebuffer> sw_fb;
 			vk::Extent2D extent;
 
-			camera cam;
+			camera* cam;
 
-			renderer(device* dev, swap_chain* swch, shader_cache* shc, const vector<object_desc>& objects);
+			renderer(device* dev, swap_chain* swch, shader_cache* shc, camera* cam, const vector<object_desc>& objects);
 
 			void reset();
 			void recreate(swap_chain*);
