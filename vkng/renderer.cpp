@@ -73,7 +73,7 @@ namespace vkng {
 				{ vk::DescriptorType::eCombinedImageSampler, objects.size() },
 			};
 			obj_desc_pool = dev->dev->createDescriptorPoolUnique(vk::DescriptorPoolCreateInfo{
-				vk::DescriptorPoolCreateFlags(), objects.size(), 2, pool_sizes
+				vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet, objects.size(), 2, pool_sizes
 			});
 			// - layout
 			obj_desc_layout = dev->create_desc_set_layout({

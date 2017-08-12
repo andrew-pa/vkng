@@ -434,6 +434,10 @@ struct test_app : public app {
 	unique_ptr<renderer::renderer> rndr;
 	unique_ptr<image> tex;
 	vk::UniqueImageView tex_view;
+
+	vector<unique_ptr<image>> diffuse_textures;
+	map<size_t, vk::UniqueImageView> diffuse_texture_views;
+
 	perspective_camera cam;
 	fps_camera_controller ctrl;
 
@@ -480,13 +484,66 @@ struct test_app : public app {
 			vk::ImageMemoryBarrier{vk::AccessFlagBits::eTransferWrite, vk::AccessFlagBits::eShaderRead, vk::ImageLayout::eTransferDstOptimal, vk::ImageLayout::eShaderReadOnlyOptimal, 
 				VK_QUEUE_FAMILY_IGNORED, VK_QUEUE_FAMILY_IGNORED, tex->operator vk::Image(), subresrange}
 		});
-		cb->end();
-		dev.graphics_qu.submit({ vk::SubmitInfo{0, nullptr, nullptr, 1, &cb.get()} }, nullptr); // start actually copying stuff while we create everything else
 		
 		vector<renderer::object_desc> objects;
 
 		Assimp::Importer imp;
-		auto scene = imp.ReadFile("C:\\Users\\andre\\Downloads\\3DModels\\sponza\\sponza.obj", aiProcessPreset_TargetRealtime_Fast);
+		auto mesh_path = string("C:\\Users\\andre\\Downloads\\3DModels\\sponza\\");
+		auto scene = imp.ReadFile(mesh_path + "sponza.obj", aiProcessPreset_TargetRealtime_Fast);
+		cout << "assimp finished" << endl;
+
+		stbi_set_flip_vertically_on_load(true);
+		vector<unique_ptr<buffer>> upload_buffers;
+		for (size_t i = 0; i < scene->mNumMaterials; ++i) {
+			auto mat = scene->mMaterials[i];
+			aiString path;
+			if (mat->GetTexture(aiTextureType_DIFFUSE, 0, &path) == aiReturn_SUCCESS) {
+				int w, h, ch;
+				auto img = stbi_load((mesh_path + path.C_Str()).c_str(), &w, &h, &ch, STBI_rgb_alpha);
+				if (img == nullptr) {
+					cout << "couldn't load image " << path.C_Str() << endl;
+					continue;
+				}
+				vk::DeviceSize img_size = w*h * 4;
+
+				// this piece of code could be much more effecient:
+				// all images could be loaded, then a buffer allocated for all of them, each one copied in
+				// the pipeline barriers and copy ops could then be collected into vectors,
+				// and then all submitted together under unified commands in the command buffer (reduction from N commands -> 3)
+				auto imgsb = make_unique<buffer>(&dev, img_size, vk::BufferUsageFlagBits::eTransferSrc,
+					vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
+				auto data = imgsb->map();
+				memcpy(data, img, img_size);
+				imgsb->unmap();
+
+				auto subresrange = vk::ImageSubresourceRange{ vk::ImageAspectFlagBits::eColor, 0,1,0,1 };
+				vk::UniqueImageView view;
+				diffuse_textures.push_back(make_unique<image>(&dev, vk::ImageType::e2D, vk::Extent3D(w, h, 1), vk::Format::eR8G8B8A8Unorm, vk::ImageTiling::eOptimal,
+					vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eSampled, vk::MemoryPropertyFlagBits::eDeviceLocal,
+					&view, vk::ImageViewType::e2D, subresrange));
+				auto& tx = diffuse_textures[diffuse_textures.size() - 1];
+
+				cb->pipelineBarrier(vk::PipelineStageFlagBits::eTopOfPipe, vk::PipelineStageFlagBits::eTopOfPipe, vk::DependencyFlags(), {}, {}, {
+					vk::ImageMemoryBarrier{vk::AccessFlags(), vk::AccessFlagBits::eTransferWrite, vk::ImageLayout::eUndefined, vk::ImageLayout::eTransferDstOptimal,
+						VK_QUEUE_FAMILY_IGNORED, VK_QUEUE_FAMILY_IGNORED, tx->operator vk::Image(), subresrange}
+				});
+
+				cb->copyBufferToImage(imgsb->operator vk::Buffer(), tx->operator vk::Image(), vk::ImageLayout::eTransferDstOptimal, {
+					vk::BufferImageCopy{0, 0, 0, vk::ImageSubresourceLayers{vk::ImageAspectFlagBits::eColor, 0, 0, 1}, {0,0,0}, {(uint32_t)w,(uint32_t)h,1}}
+				});
+
+				cb->pipelineBarrier(vk::PipelineStageFlagBits::eTopOfPipe, vk::PipelineStageFlagBits::eTopOfPipe, vk::DependencyFlags(), {}, {}, {
+					vk::ImageMemoryBarrier{vk::AccessFlagBits::eTransferWrite, vk::AccessFlagBits::eShaderRead, vk::ImageLayout::eTransferDstOptimal, vk::ImageLayout::eShaderReadOnlyOptimal,
+						VK_QUEUE_FAMILY_IGNORED, VK_QUEUE_FAMILY_IGNORED, tx->operator vk::Image(), subresrange}
+				});
+
+				upload_buffers.push_back(move(imgsb));
+				diffuse_texture_views[i] = move(view);
+			}
+		}
+		cb->end();
+		dev.graphics_qu.submit({ vk::SubmitInfo{0, nullptr, nullptr, 1, &cb.get()} }, nullptr); // start actually copying stuff while we create everything else
+		cout << "textures loaded" << endl;
 
 		stack<aiNode*> nodes;
 		nodes.push(scene->mRootNode);
@@ -512,13 +569,18 @@ struct test_app : public app {
 					for (size_t ii = 0; ii < mesh->mFaces[fi].mNumIndices; ++ii)
 						indices.push_back(mesh->mFaces[fi].mIndices[ii]);
 				}
-				objects.push_back({ vertices, indices, conv(node->mTransformation), tex_view.get() });
+				vk::ImageView tv = tex_view.get();
+				auto pdtv = diffuse_texture_views.find(mesh->mMaterialIndex);
+				if (pdtv != diffuse_texture_views.end()) tv = pdtv->second.get();
+				objects.push_back({ vertices, indices, conv(node->mTransformation), tv });
 			}
 		}
+		cout << "meshes loaded" << endl;
 		
 		rndr = make_unique<renderer::renderer>(&dev, &swp, &shc, &cam, objects);
 
 		input_handlers.push_back(&ctrl);
+		cout << "initialization finished!";
 	}
 
 	void update(float t, float dt) override {
