@@ -23,13 +23,14 @@ namespace vkng {
 		create(app);
 	}
 
-	vector<vk::UniqueFramebuffer> swap_chain::create_framebuffers(vk::RenderPass rnp) {
+	vector<vk::UniqueFramebuffer> swap_chain::create_framebuffers(vk::RenderPass rnp, function<void(size_t, vector<vk::ImageView>&)> additional_image_views) {
 		vector<vk::UniqueFramebuffer> framebuffers(image_views.size());
 		for (size_t i = 0; i < image_views.size(); ++i) {
-			const vector<vk::ImageView> att = {
+			vector<vk::ImageView> att = {
 				image_views[i].get(),
 				depth_view.get()
 			};
+			additional_image_views(i, att);
 			framebuffers[i] = dev->dev->createFramebufferUnique(vk::FramebufferCreateInfo{
 				vk::FramebufferCreateFlags(),
 				rnp, att.size(), att.data(),

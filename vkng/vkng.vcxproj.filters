@@ -73,4 +73,7 @@
     <CustomBuild Include="shader.vert" />
     <CustomBuild Include="shader.frag" />
   </ItemGroup>
+  <ItemGroup>
+    <None Include="gbuffer.frag" />
+  </ItemGroup>
 </Project>

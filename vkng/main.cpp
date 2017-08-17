@@ -488,8 +488,8 @@ struct test_app : public app {
 		vector<renderer::object_desc> objects;
 
 		Assimp::Importer imp;
-		auto mesh_path = string("C:\\Users\\andre\\Downloads\\3DModels\\sponza\\");
-		auto scene = imp.ReadFile(mesh_path + "sponza.obj", aiProcessPreset_TargetRealtime_Fast);
+		auto mesh_path = string("C:\\Users\\andre\\Source\\vkng\\vkng\\"); //string("C:\\Users\\andre\\Downloads\\3DModels\\sponza\\");
+		auto scene = imp.ReadFile(mesh_path + "widget.dae", aiProcessPreset_TargetRealtime_Fast);
 		cout << "assimp finished" << endl;
 
 		stbi_set_flip_vertically_on_load(true);

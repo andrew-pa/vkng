@@ -15,12 +15,17 @@ layout(location = 2) in vec3 inTangent;
 layout(location = 3) in vec2 inTexCoord;
 
 layout(location = 0) out vec2 texCoord;
+layout(location = 1) out vec3 worldCoord;
+layout(location = 2) out vec3 worldNormal;
 
 out gl_PerVertex {
     vec4 gl_Position;
 };
 
 void main() {
-    gl_Position = pc.view_proj * ubo.model * vec4(inPosition, 1.0);
+	vec4 wc = ubo.model * vec4(inPosition, 1.0);
+    gl_Position = pc.view_proj * wc;
+	worldCoord = wc.xyz;
+	worldNormal = (ubo.model * vec4(inNormal, 0.0)).xyz;
 	texCoord = inTexCoord;
 }

@@ -107,6 +107,8 @@ namespace vkng {
 				1, &vk::PushConstantRange{vk::ShaderStageFlagBits::eVertex, 0, sizeof(mat4)} //push constant for view_proj
 			});
 
+
+
 			//create swap chain resources (pipelines, framebuffers)
 			create(swch);
 
@@ -115,26 +117,47 @@ namespace vkng {
 
 		void renderer::create(swap_chain* swch) {
 			vector<vk::AttachmentDescription> attachments = {
-					{ vk::AttachmentDescriptionFlags(), //color
+					{ vk::AttachmentDescriptionFlags(), //swapchain color
 								swch->format, vk::SampleCountFlagBits::e1, vk::AttachmentLoadOp::eClear, vk::AttachmentStoreOp::eStore,
 								vk::AttachmentLoadOp::eDontCare, vk::AttachmentStoreOp::eDontCare,
 								vk::ImageLayout::eUndefined, vk::ImageLayout::ePresentSrcKHR },
+					
 					{ vk::AttachmentDescriptionFlags(), //depth
 								vk::Format::eD32Sfloat, vk::SampleCountFlagBits::e1, vk::AttachmentLoadOp::eClear, vk::AttachmentStoreOp::eDontCare,
 								vk::AttachmentLoadOp::eDontCare, vk::AttachmentStoreOp::eDontCare,
 								vk::ImageLayout::eUndefined, vk::ImageLayout::eDepthStencilAttachmentOptimal }
 			};
 			vk::AttachmentReference col_ref{ 0, vk::ImageLayout::eColorAttachmentOptimal };
+			array<vk::AttachmentReference, gbuf_count> gbuf_write_ref, gbuf_read_ref;
+			for (size_t i = 0; i < gbuf_count; ++i) {
+				attachments.push_back({ vk::AttachmentDescriptionFlags(), //gbuffer
+								vk::Format::eR32G32B32A32Sfloat, vk::SampleCountFlagBits::e1, vk::AttachmentLoadOp::eClear, vk::AttachmentStoreOp::eStore,
+								vk::AttachmentLoadOp::eDontCare, vk::AttachmentStoreOp::eDontCare,
+								vk::ImageLayout::eColorAttachmentOptimal, vk::ImageLayout::eColorAttachmentOptimal });
+				gbuf_write_ref[i] = vk::AttachmentReference { attachments.size()-1, vk::ImageLayout::eColorAttachmentOptimal };
+				gbuf_read_ref[i] = vk::AttachmentReference { attachments.size()-1, vk::ImageLayout::eShaderReadOnlyOptimal };
+			}
 			vk::AttachmentReference dep_ref{ 1, vk::ImageLayout::eDepthStencilAttachmentOptimal };
+			vector<vk::SubpassDescription> subpasses = {
+				// render into g-buffer
+				{ vk::SubpassDescriptionFlags(), vk::PipelineBindPoint::eGraphics, 0, nullptr, gbuf_count, gbuf_write_ref.data(), nullptr, &dep_ref },
+				// do lighting and render to backbuffer
+				{ vk::SubpassDescriptionFlags(), vk::PipelineBindPoint::eGraphics, gbuf_count, gbuf_read_ref.data(), 1, &col_ref, nullptr, nullptr }
+			};
 			vector<vk::SubpassDependency> dpnd = {
-				{	VK_SUBPASS_EXTERNAL, 0, vk::PipelineStageFlagBits::eColorAttachmentOutput, vk::PipelineStageFlagBits::eColorAttachmentOutput,
-					vk::AccessFlagBits::eColorAttachmentRead, vk::AccessFlagBits::eColorAttachmentRead | vk::AccessFlagBits::eColorAttachmentWrite, vk::DependencyFlags() },
+				// transition g-buffer to ColorAttachmentOutput from eShaderRead
+				{ VK_SUBPASS_EXTERNAL, 0, vk::PipelineStageFlagBits::eFragmentShader, vk::PipelineStageFlagBits::eColorAttachmentOutput, 
+					vk::AccessFlagBits::eShaderRead, vk::AccessFlagBits::eColorAttachmentRead|vk::AccessFlagBits::eColorAttachmentWrite },
+				// transition g-buffer to eShaderRead from ColorAttachmentOutput
+				{ 0, 1, vk::PipelineStageFlagBits::eBottomOfPipe, vk::PipelineStageFlagBits::eFragmentShader, 
+					vk::AccessFlagBits::eColorAttachmentRead|vk::AccessFlagBits::eColorAttachmentWrite, vk::AccessFlagBits::eInputAttachmentRead|vk::AccessFlagBits::eShaderRead },
+				// transition backbuffer to ColorAttachmentOutput from ColorAttachmentRead
+				{ 0, 1, vk::PipelineStageFlagBits::eColorAttachmentOutput, vk::PipelineStageFlagBits::eColorAttachmentOutput,
+					vk::AccessFlagBits::eColorAttachmentRead, vk::AccessFlagBits::eColorAttachmentRead | vk::AccessFlagBits::eColorAttachmentWrite },
 			};
 
-			vk::SubpassDescription subpass{ vk::SubpassDescriptionFlags(),
-				vk::PipelineBindPoint::eGraphics, 0, nullptr, 1, &col_ref, nullptr, &dep_ref };
 			vk::RenderPassCreateInfo rpcfo{ vk::RenderPassCreateFlags(),
-				attachments.size(), attachments.data(), 1, &subpass, dpnd.size(), dpnd.data() };
+				attachments.size(), attachments.data(), subpasses.size(), subpasses.data(), dpnd.size(), dpnd.data() };
 			smp_rp = dev->dev->createRenderPassUnique(rpcfo);
 
 			VkPipelineShaderStageCreateInfo vertShaderStageInfo = {};
@@ -146,7 +169,7 @@ namespace vkng {
 			VkPipelineShaderStageCreateInfo fragShaderStageInfo = {};
 			fragShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
 			fragShaderStageInfo.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
-			fragShaderStageInfo.module = (VkShaderModule)shc->load_shader("shader.frag.spv");
+			fragShaderStageInfo.module = (VkShaderModule)shc->load_shader("gbuffer.frag.spv");
 			fragShaderStageInfo.pName = "main";
 
 			VkPipelineShaderStageCreateInfo shaderStages[] = { vertShaderStageInfo, fragShaderStageInfo };
@@ -210,13 +233,15 @@ namespace vkng {
 			VkPipelineColorBlendAttachmentState colorBlendAttachment = {};
 			colorBlendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
 			colorBlendAttachment.blendEnable = VK_FALSE;
+			array<VkPipelineColorBlendAttachmentState, gbuf_count> blend_att_state;
+			for (size_t i = 0; i < gbuf_count; ++i) blend_att_state[i] = colorBlendAttachment;
 
 			VkPipelineColorBlendStateCreateInfo colorBlending = {};
 			colorBlending.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
 			colorBlending.logicOpEnable = VK_FALSE;
 			colorBlending.logicOp = VK_LOGIC_OP_COPY;
-			colorBlending.attachmentCount = 1;
-			colorBlending.pAttachments = &colorBlendAttachment;
+			colorBlending.attachmentCount = gbuf_count;
+			colorBlending.pAttachments = blend_att_state.data();
 			colorBlending.blendConstants[0] = 0.0f;
 			colorBlending.blendConstants[1] = 0.0f;
 			colorBlending.blendConstants[2] = 0.0f;
@@ -238,11 +263,25 @@ namespace vkng {
 			pipelineInfo.subpass = 0;
 			pipelineInfo.basePipelineHandle = VK_NULL_HANDLE;
 
-			smp_pl = dev->dev->createGraphicsPipelineUnique(VK_NULL_HANDLE, pipelineInfo);
+			gbuf_pl = dev->dev->createGraphicsPipelineUnique(VK_NULL_HANDLE, pipelineInfo);
 
 			cmd_bufs = dev->alloc_cmd_buffers(swch->images.size());
-			sw_fb = swch->create_framebuffers(smp_rp.get());
 			extent = swch->extent;
+
+			//create G-Buffer
+			gbuf_imv.resize(gbuf_count);
+			for (size_t i = 0; i < gbuf_count; ++i) {
+				// create the images & image views
+				gbuf_img.push_back(make_unique<image>(
+					dev, vk::ImageType::e2D, vk::Extent3D{extent.width, extent.height, 1}, vk::Format::eR32G32B32A32Sfloat,
+					vk::ImageTiling::eOptimal, vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eColorAttachment,
+					vk::MemoryPropertyFlagBits::eDeviceLocal, &gbuf_imv[i], vk::ImageViewType::e2D,
+					vk::ImageSubresourceRange{vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1}
+				));
+			}
+			fb = swch->create_framebuffers(smp_rp.get(), [&](size_t, vector<vk::ImageView>& att) {
+				for (const auto& iv : gbuf_imv) att.push_back(iv.get());
+			});
 
 			cam->update_proj(vec2(extent.width, extent.height));
 		}
@@ -250,8 +289,10 @@ namespace vkng {
 		void renderer::reset() {
 			//release swap chain resources
 			cmd_bufs.clear();
-			sw_fb.clear();
-			smp_pl.reset();
+			fb.clear();
+			gbuf_img.clear();
+			gbuf_imv.clear();
+			gbuf_pl.reset();
 		}
 		void renderer::recreate(swap_chain* swch) {
 			//recreate them
@@ -265,18 +306,18 @@ namespace vkng {
 							vk::ClearColorValue{ array<float,4>{0.1f, 0.1f, 0.1f, 1.f} },
 							vk::ClearDepthStencilValue{1.f, 0}
 			};
-			auto rbio = vk::RenderPassBeginInfo{ smp_rp.get(), sw_fb[image_index].get(),
+			auto rbio = vk::RenderPassBeginInfo{ smp_rp.get(), fb[image_index].get(),
 				vk::Rect2D(vk::Offset2D(), extent), 2, cc };
 			cb->beginRenderPass(rbio, vk::SubpassContents::eInline);
 
-			cb->bindPipeline(vk::PipelineBindPoint::eGraphics, smp_pl.get());
+			cb->bindPipeline(vk::PipelineBindPoint::eGraphics, gbuf_pl.get());
 
 			cb->pushConstants<mat4>(smp_pl_layout.get(), vk::ShaderStageFlagBits::eVertex, 0, { cam->_proj * cam->_view });
 
 			vk::Buffer bufs[] = { vxbuf->operator vk::Buffer() };
 			for (const auto& o : objects) {
-				cb->bindDescriptorSets(vk::PipelineBindPoint::eGraphics, smp_pl_layout.get(), 0, 
-					{ o.descriptor_set.get() }, { });
+				cb->bindDescriptorSets(vk::PipelineBindPoint::eGraphics, smp_pl_layout.get(), 0,
+				{ o.descriptor_set.get() }, { });
 				cb->bindVertexBuffers(0, 1, bufs, &o.vertex_offset);
 				cb->bindIndexBuffer(ixbuf->operator vk::Buffer(), o.index_offset, vk::IndexType::eUint32);
 				cb->drawIndexed(o.index_count, 1, 0, 0, 0);

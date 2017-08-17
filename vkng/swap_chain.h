@@ -19,7 +19,7 @@ namespace vkng {
 		void present(uint32_t index);
 		void recreate(app* app);
 
-		vector<vk::UniqueFramebuffer> create_framebuffers(vk::RenderPass rnp);
+		vector<vk::UniqueFramebuffer> create_framebuffers(vk::RenderPass rnp, function<void(size_t, vector<vk::ImageView>&)> additional_image_views = [](auto, auto) {});
 
 		swap_chain(app* app, device* dev);
 		~swap_chain();

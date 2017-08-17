@@ -43,12 +43,22 @@ namespace vkng {
 		};
 
 
+		/*
+			render pass structure
+
+			-draw stuff> gbuffer[4] & depth buffer
+			gbuffer[4] -fsq> backbuffer
+		*/
+
+		const size_t gbuf_count = 4;
 		struct renderer {
 			device* dev;
 			shader_cache* shc;
-			/*vector<image> gbuf_img;
+
+			vector<unique_ptr<image>> gbuf_img;
 			vector<vk::UniqueImageView> gbuf_imv;
-			vector<vk::UniqueFramebuffer> gbuf_fb;*/
+			vk::UniqueRenderPass gbuf_rp;
+
 			vk::UniqueSampler fsmp;
 
 			vk::UniqueDescriptorPool obj_desc_pool;
@@ -58,12 +68,12 @@ namespace vkng {
 			vector<object> objects;
 			
 			vk::UniquePipelineLayout smp_pl_layout;
-			vk::UniquePipeline smp_pl;
+			vk::UniquePipeline gbuf_pl;
 
 			vk::UniqueRenderPass smp_rp;
 
 			vector<vk::UniqueCommandBuffer> cmd_bufs;
-			vector<vk::UniqueFramebuffer> sw_fb;
+			vector<vk::UniqueFramebuffer> fb;
 			vk::Extent2D extent;
 
 			camera* cam;
