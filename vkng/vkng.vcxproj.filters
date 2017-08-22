@@ -72,8 +72,10 @@
   <ItemGroup>
     <CustomBuild Include="shader.vert" />
     <CustomBuild Include="shader.frag" />
+    <CustomBuild Include="gbuffer.frag" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="gbuffer.frag" />
+    <None Include="fsq.vert" />
+    <None Include="postprocess.frag" />
   </ItemGroup>
 </Project>

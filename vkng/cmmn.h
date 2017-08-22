@@ -58,3 +58,10 @@ public:
 		else return result<T, G>(f(e));
 	}
 };
+
+/*template<typename T>
+T generate_collect(size_t count, function<T::value_type(size_t)> f) {
+	auto c = T();
+	generate_n(c.begin(), count, f);
+	return c;
+}*/

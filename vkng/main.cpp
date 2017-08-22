@@ -580,14 +580,13 @@ struct test_app : public app {
 		rndr = make_unique<renderer::renderer>(&dev, &swp, &shc, &cam, objects);
 
 		input_handlers.push_back(&ctrl);
-		cout << "initialization finished!";
+		cout << "initialization finished!" << endl;
 	}
 
 	void update(float t, float dt) override {
-		/*for (int i = 0; i < 5; ++i) {
-			*rndr->objects[i].transform = translate(rotate(mat4(1), t*2.f, vec3(0.2f, 0.6f, 0.4f)),
-				vec3( i*3.f - 6.f, 0.f, 0.f));
-		}*/
+		for (int i = 0; i < 1; ++i) {
+			*rndr->objects[i].transform = rotate(mat4(1), t*2.f, vec3(0.2f, 0.6f, 0.4f));
+		}
 		ctrl.update(t, dt);
 	}
 	void resize() override {

@@ -59,16 +59,20 @@ namespace vkng {
 			vector<vk::UniqueImageView> gbuf_imv;
 			vk::UniqueRenderPass gbuf_rp;
 
-			vk::UniqueSampler fsmp;
+			vk::UniqueSampler fsmp, nsmp;
 
-			vk::UniqueDescriptorPool obj_desc_pool;
+			vk::UniqueDescriptorPool obj_desc_pool, aux_desc_pool;
 			vk::UniqueDescriptorSetLayout obj_desc_layout;
 			unique_ptr<buffer> vxbuf, ixbuf, ubuf;
 			void* ubuf_map;
 			vector<object> objects;
 			
-			vk::UniquePipelineLayout smp_pl_layout;
+			vk::UniquePipelineLayout smp_pl_layout, postprocess_pl_layout;
 			vk::UniquePipeline gbuf_pl;
+
+			vk::UniquePipeline postprocess_pl;
+			vk::UniqueDescriptorSetLayout postprocess_desc_layout;
+			vk::DescriptorSet postprocess_desc;
 
 			vk::UniqueRenderPass smp_rp;
 

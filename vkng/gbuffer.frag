@@ -13,8 +13,8 @@ layout(location = 3) out vec4 outStuff;
 layout(binding = 1) uniform sampler2D tex;
 
 void main() {
-	outPosition = vec4(worldCoord,0.f);
-	outNormal = vec4(worldNormal,0.f);
+	outPosition = vec4(worldCoord*.5+.5,0.f);
+	outNormal = vec4(worldNormal*.5+.5,1.f);
     outColor = texture(tex, texCoord);
 	outStuff = gl_FragCoord;
 }
