@@ -113,13 +113,14 @@ namespace vkng {
 		vmaDestroyBuffer(dev->allocator, buf, alloc);
 	}
 
-	image::image(device * dev, vk::ImageType type, vk::Extent3D size, vk::Format fmt, vk::ImageTiling til, vk::ImageUsageFlags use, vk::MemoryPropertyFlags memuse,
+	image::image(device * dev, vk::ImageCreateFlags flg, vk::ImageType type, vk::Extent3D size, vk::Format fmt, vk::ImageTiling til, vk::ImageUsageFlags use, vk::MemoryPropertyFlags memuse,
+			size_t mip_count, size_t array_layers,
 			optional<vk::UniqueImageView*> iv, vk::ImageViewType iv_type, vk::ImageSubresourceRange iv_sr) :dev(dev) {
 		VmaMemoryRequirements mreq = {};
 		mreq.requiredFlags = (VkMemoryPropertyFlags)memuse;
 		VmaAllocationInfo alli;
 		auto res = vmaCreateImage(dev->allocator, (VkImageCreateInfo*)&vk::ImageCreateInfo {
-			vk::ImageCreateFlags(), type, fmt, size, 1, 1, 
+			flg, type, fmt, size, mip_count, array_layers, 
 			vk::SampleCountFlagBits::e1, til, use
 		}, &mreq, &img, &alloc, &alli);
 		assert(res == VK_SUCCESS);

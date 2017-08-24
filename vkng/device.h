@@ -25,9 +25,13 @@ namespace vkng {
 		struct device* dev;
 		VkImage img;
 		VmaAllocation alloc;
+		image(device* dev, vk::ImageCreateFlags createflags, vk::ImageType type, vk::Extent3D size, vk::Format fmt,
+			vk::ImageTiling til, vk::ImageUsageFlags use, vk::MemoryPropertyFlags memuse, size_t mip_count, size_t array_layers,
+			optional<vk::UniqueImageView*> iv = {}, vk::ImageViewType iv_type = {}, vk::ImageSubresourceRange iv_sr = {});
 		image(device* dev, vk::ImageType type, vk::Extent3D size, vk::Format fmt,
 			vk::ImageTiling til, vk::ImageUsageFlags use, vk::MemoryPropertyFlags memuse,
-			optional<vk::UniqueImageView*> iv = {}, vk::ImageViewType iv_type = {}, vk::ImageSubresourceRange iv_sr = {});
+			optional<vk::UniqueImageView*> iv = {}, vk::ImageViewType iv_type = {}, vk::ImageSubresourceRange iv_sr = {})
+			: image(dev, vk::ImageCreateFlags(), type, size, fmt, til, use, memuse, 1, 1, iv, iv_type, iv_sr) {}
 
 		operator vk::Image() {
 			return vk::Image(img);
