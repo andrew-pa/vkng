@@ -7,6 +7,13 @@ layout(location = 0) out vec4 outColor;
 
 layout(binding = 0) uniform sampler2D gbuffer[4];
 
+layout(push_constant) uniform PushConstants {
+	vec3 d;
+	vec3 color;
+} L;
+
+
+
 void main() {
 	vec4 norm_exist = texture(gbuffer[1], texCoord);
 	vec3 texc = texture(gbuffer[2], texCoord).xyz;
@@ -14,5 +21,5 @@ void main() {
 		discard;
 	}
 	vec3 norm = normalize(norm_exist.xyz*2.-1.);
-	outColor = vec4(texc * max(0., dot(norm, vec3(0., 1., 0.))), 1.);
+	outColor = vec4(texc * max(0., dot(norm, L.d)) * L.color, 1.);
 }

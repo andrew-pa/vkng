@@ -215,8 +215,9 @@ namespace vkng {
 				vk::PipelineLayoutCreateFlags(), 1, &obj_desc_layout.get(),
 				1, &vk::PushConstantRange{vk::ShaderStageFlagBits::eVertex, 0, sizeof(mat4)} //push constant for view_proj
 			});
-			light_pl_layout = dev->dev->createPipelineLayoutUnique(vk::PipelineLayoutCreateInfo{
+			directional_light_pl_layout = dev->dev->createPipelineLayoutUnique(vk::PipelineLayoutCreateInfo{
 				vk::PipelineLayoutCreateFlags(), 1, &light_desc_layout.get(),
+				1, &vk::PushConstantRange{vk::ShaderStageFlagBits::eFragment, 0, sizeof(directional_light)} //push constant for view_proj
 			});
 			skybox_pl_layout = dev->dev->createPipelineLayoutUnique(vk::PipelineLayoutCreateInfo{
 				vk::PipelineLayoutCreateFlags(), 1, &postprocess_desc_layout.get(),
@@ -418,11 +419,15 @@ namespace vkng {
 			shaderStages[0].module = (VkShaderModule)shc->load_shader("fsq.vert.spv").unwrap();
 			shaderStages[1].module = (VkShaderModule)shc->load_shader("directional-light.frag.spv").unwrap();
 			colorBlending.attachmentCount = 1;
+			blend_att_state[0].blendEnable = VK_TRUE;
+			blend_att_state[0].colorBlendOp = VK_BLEND_OP_ADD;
+			blend_att_state[0].srcAlphaBlendFactor = blend_att_state[0].dstAlphaBlendFactor =
+				blend_att_state[0].srcColorBlendFactor = blend_att_state[0].dstColorBlendFactor = VK_BLEND_FACTOR_ONE;
 			depthStencil.depthTestEnable = VK_FALSE;
 			depthStencil.depthWriteEnable = VK_FALSE;
 			rasterizer.cullMode = VK_CULL_MODE_NONE;
 			pipelineInfo.subpass = 1;
-			pipelineInfo.layout = (VkPipelineLayout)light_pl_layout.get();
+			pipelineInfo.layout = (VkPipelineLayout)directional_light_pl_layout.get();
 			directional_light_pl = dev->dev->createGraphicsPipelineUnique(VK_NULL_HANDLE, pipelineInfo);
 
 			vertexInputInfo.vertexAttributeDescriptionCount = 0;
@@ -430,6 +435,7 @@ namespace vkng {
 			shaderStages[0].module = (VkShaderModule)shc->load_shader("fsq.vert.spv").unwrap();
 			shaderStages[1].module = (VkShaderModule)shc->load_shader("postprocess.frag.spv").unwrap();
 			colorBlending.attachmentCount = 1;
+			blend_att_state[0].blendEnable = VK_FALSE;
 			depthStencil.depthTestEnable = VK_FALSE;
 			depthStencil.depthWriteEnable = VK_FALSE;
 			rasterizer.cullMode = VK_CULL_MODE_NONE;
@@ -527,8 +533,11 @@ namespace vkng {
 
 			// calculate directional lighting
 			cb->bindPipeline(vk::PipelineBindPoint::eGraphics, directional_light_pl.get());
-			cb->bindDescriptorSets(vk::PipelineBindPoint::eGraphics, light_pl_layout.get(), 0, { light_desc }, {});
-			cb->draw(3, 1, 0, 0);
+			cb->bindDescriptorSets(vk::PipelineBindPoint::eGraphics, directional_light_pl_layout.get(), 0, { light_desc }, {});
+			for (const auto& L : directional_lights) {
+				cb->pushConstants<directional_light>(directional_light_pl_layout.get(), vk::ShaderStageFlagBits::eFragment, 0, { L });
+				cb->draw(3, 1, 0, 0);
+			}
 
 			// draw background with skybox
 			cb->bindPipeline(vk::PipelineBindPoint::eGraphics, skybox_pl.get());

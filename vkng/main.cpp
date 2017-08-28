@@ -160,7 +160,7 @@ struct test_app : public app {
 		// load sky cubemap
 		unique_ptr<buffer> sky_staging;
 		{
-			const string cubemap_path = "C:\\Users\\andre\\Source\\vkng\\vkng\\MountainPath\\";
+			const string cubemap_path = "C:\\Users\\andre\\Source\\vkng\\vkng\\Fjaderholmarna\\";
 			vector<void*> img_data;
 			for (const auto& path : { "posx.jpg", "negx.jpg", "posy.jpg", "negy.jpg", "posz.jpg", "negz.jpg" }) {
 				img_data.push_back(stbi_load((cubemap_path + path).c_str(), &w, &h, &ch, STBI_rgb_alpha));
@@ -290,14 +290,19 @@ struct test_app : public app {
 		
 		rndr = make_unique<renderer::renderer>(&dev, &swp, &shc, &cam, objects, sky_view.get());
 
+		rndr->directional_lights.push_back(renderer::directional_light{ {0.f, 1.f, 0.f}, {0.8f, 0.8f, 0.8f} });
+		rndr->directional_lights.push_back(renderer::directional_light{ {1.f, 1.f, 0.1f}, {0.2f, 0.1f, 0.f} });
+		rndr->directional_lights.push_back(renderer::directional_light{ {-1.f, 1.f, 0.1f}, {0.f, 0.1f, 0.2f} });
+		rndr->directional_lights.push_back(renderer::directional_light{ {0.f, -1.f, 1.f}, {0.1f, 0.1f, 0.1f} });
+
 		input_handlers.push_back(&ctrl);
 		cout << "initialization finished!" << endl;
 	}
 
 	void update(float t, float dt) override {
-	/*	for (int i = 0; i < 1; ++i) {
+		/*for (int i = 0; i < 1; ++i) {
 			*rndr->objects[i].transform = rotate(mat4(1), t*2.f, vec3(0.2f, 0.6f, 0.4f));
-		} */
+		}*/
 		ctrl.update(t, dt);
 	}
 	void resize() override {

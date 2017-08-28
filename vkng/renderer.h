@@ -42,6 +42,12 @@ namespace vkng {
 			mat4* transform;
 		};
 
+		struct directional_light {
+			vec3 direction; float padding;
+			vec3 color;
+			directional_light(vec3 d, vec3 c) : direction(normalize(d)), color(c) {}
+		};
+
 
 		/*
 			render pass structure
@@ -71,9 +77,11 @@ namespace vkng {
 			void* ubuf_map;
 			vector<object> objects;
 
+			vector<directional_light> directional_lights;
+
 			vk::DeviceSize box_vertex_offset, box_index_offset;
 			
-			vk::UniquePipelineLayout smp_pl_layout, light_pl_layout, skybox_pl_layout, postprocess_pl_layout;
+			vk::UniquePipelineLayout smp_pl_layout, directional_light_pl_layout, skybox_pl_layout, postprocess_pl_layout;
 			vk::UniquePipeline gbuf_pl, directional_light_pl, skybox_pl, postprocess_pl;
 
 			vk::UniqueRenderPass smp_rp;
