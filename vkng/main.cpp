@@ -118,7 +118,7 @@ struct test_app : public app {
 		shc(&dev),
 		cam(vec2(1280, 960), vec3(0.f, 5.f, 5.f), vec3(0.f), vec3(0.f, 1.f, 0.f), 
 			pi<float>()/3.f, 1.f, 3500.f),
-		ctrl(cam, vec3(1.f))
+		ctrl(cam, vec3(100.f))
 	{
 		/*vector<renderer::vertex> vertices;
 		vector<uint32> indices;
@@ -198,8 +198,9 @@ struct test_app : public app {
 		vector<renderer::object_desc> objects;
 
 		Assimp::Importer imp;
-		auto mesh_path = string("C:\\Users\\andre\\Source\\vkng\\vkng\\"); //string("C:\\Users\\andre\\Downloads\\3DModels\\sponza\\");
-		auto scene = imp.ReadFile(mesh_path + "widget.dae", aiProcessPreset_TargetRealtime_Fast);
+		auto mesh_path = //string("C:\\Users\\andre\\Source\\vkng\\vkng\\"); 
+						string("C:\\Users\\andre\\Downloads\\3DModels\\sponza\\");
+		auto scene = imp.ReadFile(mesh_path + "sponza.obj", aiProcessPreset_TargetRealtime_Fast);
 		cout << "assimp finished" << endl;
 
 		stbi_set_flip_vertically_on_load(true);
@@ -294,9 +295,9 @@ struct test_app : public app {
 	}
 
 	void update(float t, float dt) override {
-		for (int i = 0; i < 1; ++i) {
+	/*	for (int i = 0; i < 1; ++i) {
 			*rndr->objects[i].transform = rotate(mat4(1), t*2.f, vec3(0.2f, 0.6f, 0.4f));
-		}
+		} */
 		ctrl.update(t, dt);
 	}
 	void resize() override {

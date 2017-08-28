@@ -65,14 +65,16 @@ namespace vkng {
 
 			vk::UniqueDescriptorPool obj_desc_pool, aux_desc_pool;
 			vk::UniqueDescriptorSetLayout obj_desc_layout, postprocess_desc_layout, light_desc_layout;
-			vk::DescriptorSet postprocess_desc, light_desc;
+			vk::DescriptorSet postprocess_desc, light_desc, skybox_desc;
 
 			unique_ptr<buffer> vxbuf, ixbuf, ubuf;
 			void* ubuf_map;
 			vector<object> objects;
+
+			vk::DeviceSize box_vertex_offset, box_index_offset;
 			
-			vk::UniquePipelineLayout smp_pl_layout, light_pl_layout, postprocess_pl_layout;
-			vk::UniquePipeline gbuf_pl, directional_light_pl, postprocess_pl;
+			vk::UniquePipelineLayout smp_pl_layout, light_pl_layout, skybox_pl_layout, postprocess_pl_layout;
+			vk::UniquePipeline gbuf_pl, directional_light_pl, skybox_pl, postprocess_pl;
 
 			vk::UniqueRenderPass smp_rp;
 
