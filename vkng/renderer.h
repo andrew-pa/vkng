@@ -56,23 +56,23 @@ namespace vkng {
 			shader_cache* shc;
 
 			vector<unique_ptr<image>> gbuf_img;
+			unique_ptr<image> itrmd_img; // an intermediate buffer to hold the summed final colors of objects
+
 			vector<vk::UniqueImageView> gbuf_imv;
-			vk::UniqueRenderPass gbuf_rp;
+			vk::UniqueImageView itrmd_imv;
 
 			vk::UniqueSampler fsmp, nsmp;
 
 			vk::UniqueDescriptorPool obj_desc_pool, aux_desc_pool;
-			vk::UniqueDescriptorSetLayout obj_desc_layout;
+			vk::UniqueDescriptorSetLayout obj_desc_layout, postprocess_desc_layout, light_desc_layout;
+			vk::DescriptorSet postprocess_desc, light_desc;
+
 			unique_ptr<buffer> vxbuf, ixbuf, ubuf;
 			void* ubuf_map;
 			vector<object> objects;
 			
-			vk::UniquePipelineLayout smp_pl_layout, postprocess_pl_layout;
-			vk::UniquePipeline gbuf_pl;
-
-			vk::UniquePipeline postprocess_pl;
-			vk::UniqueDescriptorSetLayout postprocess_desc_layout;
-			vk::DescriptorSet postprocess_desc;
+			vk::UniquePipelineLayout smp_pl_layout, light_pl_layout, postprocess_pl_layout;
+			vk::UniquePipeline gbuf_pl, directional_light_pl, postprocess_pl;
 
 			vk::UniqueRenderPass smp_rp;
 
@@ -82,7 +82,8 @@ namespace vkng {
 
 			camera* cam;
 
-			renderer(device* dev, swap_chain* swch, shader_cache* shc, camera* cam, const vector<object_desc>& objects);
+			renderer(device* dev, swap_chain* swch, shader_cache* shc,
+				camera* cam, const vector<object_desc>& objects, vk::ImageView sky);
 
 			void reset();
 			void recreate(swap_chain*);
@@ -90,6 +91,9 @@ namespace vkng {
 			vk::CommandBuffer render(uint32_t image_index);
 		private:
 			void create(swap_chain*);
+			void create_render_pass(swap_chain*);
+			void create_pipelines(swap_chain*);
+			void create_framebuffers(swap_chain*);
 		};
 	}
 }

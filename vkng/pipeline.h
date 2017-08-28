@@ -10,11 +10,12 @@ namespace vkng {
 	public:
 		shader_cache(device* dev) : dev(dev) {}
 
-		vk::ShaderModule load_shader(const string& path) {
+		result<vk::ShaderModule, errno_t> load_shader(const string& path) {
 			auto f = shaders.find(path);
 			if (f != shaders.end()) return f->second.get();
 			else {
 				ifstream file(path, ios::ate | ios::binary);
+				if (!file) return result<vk::ShaderModule, errno_t>(1);
 				auto size = (size_t)file.tellg();
 				vector<char> buffer(size);
 				file.seekg(0);

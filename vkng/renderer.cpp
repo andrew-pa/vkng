@@ -2,7 +2,9 @@
 
 namespace vkng {
 	namespace renderer {
-		renderer::renderer(device* dev, swap_chain* swch, shader_cache* shc, camera* cam, const vector<object_desc>& od) : dev(dev), shc(shc), cam(cam) {
+		renderer::renderer(device* dev, swap_chain* swch, shader_cache* shc, camera* cam,
+				const vector<object_desc>& od, vk::ImageView sky_view) : dev(dev), shc(shc), cam(cam)
+		{
 			objects.resize(od.size());
 
 			//count objects to ascertain resource requirements
@@ -80,9 +82,9 @@ namespace vkng {
 				vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet, objects.size(), 2, pool_sizes
 			});
 			
-			pool_sizes[0] = { vk::DescriptorType::eCombinedImageSampler, gbuf_count };
+			pool_sizes[0] = { vk::DescriptorType::eCombinedImageSampler, gbuf_count+1 };
 			aux_desc_pool = dev->dev->createDescriptorPoolUnique(vk::DescriptorPoolCreateInfo{
-				vk::DescriptorPoolCreateFlags(), 1, 1, pool_sizes
+				vk::DescriptorPoolCreateFlags(), 2, 1, pool_sizes
 			});
 
 			// - layout
@@ -90,8 +92,11 @@ namespace vkng {
 				vk::DescriptorSetLayoutBinding{0, vk::DescriptorType::eUniformBuffer, 1, vk::ShaderStageFlagBits::eVertex},
 				vk::DescriptorSetLayoutBinding{1, vk::DescriptorType::eCombinedImageSampler, 1, vk::ShaderStageFlagBits::eFragment}
 			});
+			light_desc_layout = dev->create_desc_set_layout({
+				vk::DescriptorSetLayoutBinding{0, vk::DescriptorType::eCombinedImageSampler, gbuf_count, vk::ShaderStageFlagBits::eFragment},
+			});
 			postprocess_desc_layout = dev->create_desc_set_layout({
-				vk::DescriptorSetLayoutBinding{0, vk::DescriptorType::eCombinedImageSampler, gbuf_count, vk::ShaderStageFlagBits::eFragment}
+				vk::DescriptorSetLayoutBinding{0, vk::DescriptorType::eCombinedImageSampler, 1, vk::ShaderStageFlagBits::eFragment},
 			});
 
 			// - sets
@@ -113,22 +118,32 @@ namespace vkng {
 				writes.push_back(vk::WriteDescriptorSet{ objects[i].descriptor_set.get(), 1, 0, 1,
 					vk::DescriptorType::eCombinedImageSampler, &dftx_ifo[i] });
 			}
-			dev->dev->updateDescriptorSets(writes, {});
 
-			postprocess_desc = dev->dev->allocateDescriptorSets(vk::DescriptorSetAllocateInfo{
-				aux_desc_pool.get(), 1, &postprocess_desc_layout.get()
-			})[0];
+			layouts = vector<vk::DescriptorSetLayout>{ postprocess_desc_layout.get(), light_desc_layout.get() };
+			auto aux_desc = dev->dev->allocateDescriptorSets(vk::DescriptorSetAllocateInfo{
+				aux_desc_pool.get(), 2, layouts.data()
+			});
+			postprocess_desc = aux_desc[0];
+			light_desc = aux_desc[1];
+
+			/*auto sky_info = vk::DescriptorImageInfo{ fsmp.get(), sky_view,
+				vk::ImageLayout::eShaderReadOnlyOptimal };
+			writes.push_back(vk::WriteDescriptorSet{ postprocess_desc, 1, 0, 1,
+				vk::DescriptorType::eCombinedImageSampler, &sky_info });*/
+
+			dev->dev->updateDescriptorSets(writes, {});
 
 			//create pipeline layouts
 			smp_pl_layout = dev->dev->createPipelineLayoutUnique(vk::PipelineLayoutCreateInfo{
 				vk::PipelineLayoutCreateFlags(), 1, &obj_desc_layout.get(),
 				1, &vk::PushConstantRange{vk::ShaderStageFlagBits::eVertex, 0, sizeof(mat4)} //push constant for view_proj
 			});
-			postprocess_pl_layout = dev->dev->createPipelineLayoutUnique(vk::PipelineLayoutCreateInfo{
-				vk::PipelineLayoutCreateFlags(), 1, &postprocess_desc_layout.get()
+			light_pl_layout = dev->dev->createPipelineLayoutUnique(vk::PipelineLayoutCreateInfo{
+				vk::PipelineLayoutCreateFlags(), 1, &light_desc_layout.get(),
 			});
-
-
+			postprocess_pl_layout = dev->dev->createPipelineLayoutUnique(vk::PipelineLayoutCreateInfo{
+				vk::PipelineLayoutCreateFlags(), 1, &postprocess_desc_layout.get(),
+			});
 
 
 			//create swap chain resources (pipelines, framebuffers)
@@ -136,62 +151,83 @@ namespace vkng {
 
 			dev->graphics_qu.waitIdle();
 		}
-
-		void renderer::create(swap_chain* swch) {
+		
+		void renderer::create_render_pass(swap_chain* swch) {
 			vector<vk::AttachmentDescription> attachments = {
 					{ vk::AttachmentDescriptionFlags(), //swapchain color
 								swch->format, vk::SampleCountFlagBits::e1, vk::AttachmentLoadOp::eClear, vk::AttachmentStoreOp::eStore,
 								vk::AttachmentLoadOp::eDontCare, vk::AttachmentStoreOp::eDontCare,
 								vk::ImageLayout::eUndefined, vk::ImageLayout::ePresentSrcKHR },
-					
+
 					{ vk::AttachmentDescriptionFlags(), //depth
 								vk::Format::eD32Sfloat, vk::SampleCountFlagBits::e1, vk::AttachmentLoadOp::eClear, vk::AttachmentStoreOp::eDontCare,
 								vk::AttachmentLoadOp::eDontCare, vk::AttachmentStoreOp::eDontCare,
 								vk::ImageLayout::eUndefined, vk::ImageLayout::eDepthStencilAttachmentOptimal }
 			};
 			vk::AttachmentReference col_ref{ 0, vk::ImageLayout::eColorAttachmentOptimal };
+			vk::AttachmentReference dep_ref{ 1, vk::ImageLayout::eDepthStencilAttachmentOptimal };
+
+			attachments.push_back({ vk::AttachmentDescriptionFlags(), //intermediate buffer
+							vk::Format::eR32G32B32A32Sfloat, vk::SampleCountFlagBits::e1, vk::AttachmentLoadOp::eClear, vk::AttachmentStoreOp::eStore,
+							vk::AttachmentLoadOp::eDontCare, vk::AttachmentStoreOp::eDontCare,
+							vk::ImageLayout::eColorAttachmentOptimal, vk::ImageLayout::eColorAttachmentOptimal });
+			vk::AttachmentReference itrmd_write_ref{ 2, vk::ImageLayout::eColorAttachmentOptimal };
+			vk::AttachmentReference itrmd_read_ref{ 2, vk::ImageLayout::eShaderReadOnlyOptimal };
+
 			array<vk::AttachmentReference, gbuf_count> gbuf_write_ref, gbuf_read_ref;
 			for (size_t i = 0; i < gbuf_count; ++i) {
 				attachments.push_back({ vk::AttachmentDescriptionFlags(), //gbuffer
 								vk::Format::eR32G32B32A32Sfloat, vk::SampleCountFlagBits::e1, vk::AttachmentLoadOp::eClear, vk::AttachmentStoreOp::eStore,
 								vk::AttachmentLoadOp::eDontCare, vk::AttachmentStoreOp::eDontCare,
 								vk::ImageLayout::eColorAttachmentOptimal, vk::ImageLayout::eColorAttachmentOptimal });
-				gbuf_write_ref[i] = vk::AttachmentReference { attachments.size()-1, vk::ImageLayout::eColorAttachmentOptimal };
-				gbuf_read_ref[i] = vk::AttachmentReference { attachments.size()-1, vk::ImageLayout::eShaderReadOnlyOptimal };
+				gbuf_write_ref[i] = vk::AttachmentReference{ attachments.size() - 1, vk::ImageLayout::eColorAttachmentOptimal };
+				gbuf_read_ref[i] = vk::AttachmentReference{ attachments.size() - 1, vk::ImageLayout::eShaderReadOnlyOptimal };
 			}
-			vk::AttachmentReference dep_ref{ 1, vk::ImageLayout::eDepthStencilAttachmentOptimal };
+
 			vector<vk::SubpassDescription> subpasses = {
 				// render into g-buffer
 				{ vk::SubpassDescriptionFlags(), vk::PipelineBindPoint::eGraphics, 0, nullptr, gbuf_count, gbuf_write_ref.data(), nullptr, &dep_ref },
-				// do lighting and render to backbuffer
-				{ vk::SubpassDescriptionFlags(), vk::PipelineBindPoint::eGraphics, gbuf_count, gbuf_read_ref.data(), 1, &col_ref, nullptr, nullptr }
+				// do lighting and write to itermediate buffer
+				{ vk::SubpassDescriptionFlags(), vk::PipelineBindPoint::eGraphics, gbuf_count, gbuf_read_ref.data(), 1, &itrmd_write_ref, nullptr, nullptr },
+				// postprocess and write to backbuffer
+				{ vk::SubpassDescriptionFlags(), vk::PipelineBindPoint::eGraphics, 1, &itrmd_read_ref, 1, &col_ref, nullptr, nullptr }
 			};
 			vector<vk::SubpassDependency> dpnd = {
 				// transition g-buffer to ColorAttachmentOutput from eShaderRead
-				{ VK_SUBPASS_EXTERNAL, 0, vk::PipelineStageFlagBits::eFragmentShader, vk::PipelineStageFlagBits::eColorAttachmentOutput, 
-					vk::AccessFlagBits::eShaderRead, vk::AccessFlagBits::eColorAttachmentRead|vk::AccessFlagBits::eColorAttachmentWrite },
+				{ VK_SUBPASS_EXTERNAL, 0, vk::PipelineStageFlagBits::eFragmentShader, vk::PipelineStageFlagBits::eColorAttachmentOutput,
+					vk::AccessFlagBits::eShaderRead, vk::AccessFlagBits::eColorAttachmentRead | vk::AccessFlagBits::eColorAttachmentWrite },
 				// transition g-buffer to eShaderRead from ColorAttachmentOutput
-				{ 0, 1, vk::PipelineStageFlagBits::eBottomOfPipe, vk::PipelineStageFlagBits::eFragmentShader, 
-					vk::AccessFlagBits::eColorAttachmentRead|vk::AccessFlagBits::eColorAttachmentWrite, vk::AccessFlagBits::eShaderRead },
+				{ 0, 1, vk::PipelineStageFlagBits::eBottomOfPipe, vk::PipelineStageFlagBits::eFragmentShader,
+					vk::AccessFlagBits::eColorAttachmentRead | vk::AccessFlagBits::eColorAttachmentWrite, vk::AccessFlagBits::eShaderRead },
+
+				// transition intermediate buffer to ColorAttachmentOutput from eShaderRead
+				{ 0, 1, vk::PipelineStageFlagBits::eFragmentShader, vk::PipelineStageFlagBits::eColorAttachmentOutput,
+					vk::AccessFlagBits::eShaderRead, vk::AccessFlagBits::eColorAttachmentRead | vk::AccessFlagBits::eColorAttachmentWrite },
+				// transition intermediate buffer to eShaderRead from ColorAttachmentOutput
+				{ 1, 2, vk::PipelineStageFlagBits::eBottomOfPipe, vk::PipelineStageFlagBits::eFragmentShader,
+					vk::AccessFlagBits::eColorAttachmentRead | vk::AccessFlagBits::eColorAttachmentWrite, vk::AccessFlagBits::eShaderRead },
+
 				// transition backbuffer to ColorAttachmentOutput from ColorAttachmentRead
-				{ 0, 1, vk::PipelineStageFlagBits::eColorAttachmentOutput, vk::PipelineStageFlagBits::eColorAttachmentOutput,
+				{ 1, 2, vk::PipelineStageFlagBits::eColorAttachmentOutput, vk::PipelineStageFlagBits::eColorAttachmentOutput,
 					vk::AccessFlagBits::eColorAttachmentRead, vk::AccessFlagBits::eColorAttachmentRead | vk::AccessFlagBits::eColorAttachmentWrite },
 			};
 
 			vk::RenderPassCreateInfo rpcfo{ vk::RenderPassCreateFlags(),
 				attachments.size(), attachments.data(), subpasses.size(), subpasses.data(), dpnd.size(), dpnd.data() };
 			smp_rp = dev->dev->createRenderPassUnique(rpcfo);
+		}
 
+		void renderer::create_pipelines(swap_chain* swch) {
 			VkPipelineShaderStageCreateInfo vertShaderStageInfo = {};
 			vertShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
 			vertShaderStageInfo.stage = VK_SHADER_STAGE_VERTEX_BIT;
-			vertShaderStageInfo.module = (VkShaderModule)shc->load_shader("shader.vert.spv");
+			vertShaderStageInfo.module = (VkShaderModule)shc->load_shader("shader.vert.spv").unwrap();
 			vertShaderStageInfo.pName = "main";
 
 			VkPipelineShaderStageCreateInfo fragShaderStageInfo = {};
 			fragShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
 			fragShaderStageInfo.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
-			fragShaderStageInfo.module = (VkShaderModule)shc->load_shader("gbuffer.frag.spv");
+			fragShaderStageInfo.module = (VkShaderModule)shc->load_shader("gbuffer.frag.spv").unwrap();
 			fragShaderStageInfo.pName = "main";
 
 			VkPipelineShaderStageCreateInfo shaderStages[] = { vertShaderStageInfo, fragShaderStageInfo };
@@ -287,45 +323,75 @@ namespace vkng {
 
 			gbuf_pl = dev->dev->createGraphicsPipelineUnique(VK_NULL_HANDLE, pipelineInfo);
 
+
 			vertexInputInfo.vertexAttributeDescriptionCount = 0;
 			vertexInputInfo.vertexBindingDescriptionCount = 0;
-			shaderStages[0].module = (VkShaderModule)shc->load_shader("fsq.vert.spv");
-			shaderStages[1].module = (VkShaderModule)shc->load_shader("postprocess.frag.spv");
+			shaderStages[0].module = (VkShaderModule)shc->load_shader("fsq.vert.spv").unwrap();
+			shaderStages[1].module = (VkShaderModule)shc->load_shader("directional-light.frag.spv").unwrap();
 			colorBlending.attachmentCount = 1;
 			depthStencil.depthTestEnable = VK_FALSE;
 			depthStencil.depthWriteEnable = VK_FALSE;
 			rasterizer.cullMode = VK_CULL_MODE_NONE;
 			pipelineInfo.subpass = 1;
+			pipelineInfo.layout = (VkPipelineLayout)light_pl_layout.get();
+
+			directional_light_pl = dev->dev->createGraphicsPipelineUnique(VK_NULL_HANDLE, pipelineInfo);
+
+
+			vertexInputInfo.vertexAttributeDescriptionCount = 0;
+			vertexInputInfo.vertexBindingDescriptionCount = 0;
+			shaderStages[0].module = (VkShaderModule)shc->load_shader("fsq.vert.spv").unwrap();
+			shaderStages[1].module = (VkShaderModule)shc->load_shader("postprocess.frag.spv").unwrap();
+			colorBlending.attachmentCount = 1;
+			depthStencil.depthTestEnable = VK_FALSE;
+			depthStencil.depthWriteEnable = VK_FALSE;
+			rasterizer.cullMode = VK_CULL_MODE_NONE;
+			pipelineInfo.subpass = 2;
 			pipelineInfo.layout = (VkPipelineLayout)postprocess_pl_layout.get();
-			
+
 			postprocess_pl = dev->dev->createGraphicsPipelineUnique(VK_NULL_HANDLE, pipelineInfo);
 
 			cmd_bufs = dev->alloc_cmd_buffers(swch->images.size());
 			extent = swch->extent;
+		}
 
-			//create G-Buffer
+		void renderer::create_framebuffers(swap_chain* swch) {
+			//create framebuffers
 			gbuf_imv.resize(gbuf_count);
 			for (size_t i = 0; i < gbuf_count; ++i) {
 				// create the images & image views
 				gbuf_img.push_back(make_unique<image>(
-					dev, vk::ImageType::e2D, vk::Extent3D{extent.width, extent.height, 1}, vk::Format::eR32G32B32A32Sfloat,
+					dev, vk::ImageType::e2D, vk::Extent3D{ extent.width, extent.height, 1 }, vk::Format::eR32G32B32A32Sfloat,
 					vk::ImageTiling::eOptimal, vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eInputAttachment,
 					vk::MemoryPropertyFlagBits::eDeviceLocal, &gbuf_imv[i], vk::ImageViewType::e2D,
-					vk::ImageSubresourceRange{vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1}
+					vk::ImageSubresourceRange{ vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1 }
 				));
 			}
+			itrmd_img = make_unique<image>(
+				dev, vk::ImageType::e2D, vk::Extent3D{ extent.width, extent.height, 1 }, vk::Format::eR32G32B32A32Sfloat,
+				vk::ImageTiling::eOptimal, vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eInputAttachment,
+				vk::MemoryPropertyFlagBits::eDeviceLocal, &itrmd_imv, vk::ImageViewType::e2D,
+				vk::ImageSubresourceRange{ vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1 }
+			);
 			fb = swch->create_framebuffers(smp_rp.get(), [&](size_t, vector<vk::ImageView>& att) {
+				att.push_back(itrmd_imv.get());
 				for (const auto& iv : gbuf_imv) att.push_back(iv.get());
 			});
 
 			vector<vk::DescriptorImageInfo> gbuf_ifo;
 			for (size_t i = 0; i < gbuf_count; ++i)
 				gbuf_ifo.push_back(vk::DescriptorImageInfo{ nsmp.get(), gbuf_imv[i].get(), vk::ImageLayout::eShaderReadOnlyOptimal });
-			dev->dev->updateDescriptorSets({ vk::WriteDescriptorSet{ postprocess_desc, 0, 0, gbuf_count,
-				vk::DescriptorType::eCombinedImageSampler, gbuf_ifo.data() } }, {});
+			vk::DescriptorImageInfo itrmd_ifo{ nsmp.get(), itrmd_imv.get(), vk::ImageLayout::eShaderReadOnlyOptimal };
+			dev->dev->updateDescriptorSets({
+				vk::WriteDescriptorSet{ light_desc, 0, 0, gbuf_count, vk::DescriptorType::eCombinedImageSampler, gbuf_ifo.data() },
+				vk::WriteDescriptorSet{ postprocess_desc, 0, 0, 1, vk::DescriptorType::eCombinedImageSampler, &itrmd_ifo }
+			}, {});
+		}
 
-
-
+		void renderer::create(swap_chain* swch) {
+			create_render_pass(swch);
+			create_pipelines(swch);
+			create_framebuffers(swch);
 			cam->update_proj(vec2(extent.width, extent.height));
 		}
 
@@ -345,16 +411,17 @@ namespace vkng {
 		vk::CommandBuffer renderer::render(uint32_t image_index) {
 			auto& cb = cmd_bufs[image_index];
 			cb->begin(vk::CommandBufferBeginInfo{ vk::CommandBufferUsageFlagBits::eOneTimeSubmit });
-			vk::ClearValue cc[] = {
-							vk::ClearColorValue{ array<float,4>{0.1f, 0.1f, 0.1f, 1.f} },
-							vk::ClearDepthStencilValue{1.f, 0},
-							vk::ClearColorValue{ array<float,4>{0.f, 0.f, 0.f, 0.f} },
-							vk::ClearColorValue{ array<float,4>{0.f, 0.f, 0.f, 0.f} },
-							vk::ClearColorValue{ array<float,4>{0.f, 0.f, 0.f, 0.f} },
-							vk::ClearColorValue{ array<float,4>{0.f, 0.f, 0.f, 0.f} },
+			const vector<vk::ClearValue> cc = {
+				vk::ClearColorValue{ array<float,4>{0.1f, 0.1f, 0.1f, 1.f} },
+				vk::ClearDepthStencilValue{1.f, 0},
+				vk::ClearColorValue{ array<float,4>{0.f, 0.f, 0.f, 0.f} },
+				vk::ClearColorValue{ array<float,4>{0.f, 0.f, 0.f, 0.f} },
+				vk::ClearColorValue{ array<float,4>{0.f, 0.f, 0.f, 0.f} },
+				vk::ClearColorValue{ array<float,4>{0.f, 0.f, 0.f, 0.f} },
+				vk::ClearColorValue{ array<float,4>{0.f, 0.f, 0.f, 0.f} },
 			};
 			auto rbio = vk::RenderPassBeginInfo{ smp_rp.get(), fb[image_index].get(),
-				vk::Rect2D(vk::Offset2D(), extent), 6, cc };
+				vk::Rect2D(vk::Offset2D(), extent), cc.size(), cc.data() };
 			cb->beginRenderPass(rbio, vk::SubpassContents::eInline);
 
 			cb->bindPipeline(vk::PipelineBindPoint::eGraphics, gbuf_pl.get());
@@ -369,6 +436,12 @@ namespace vkng {
 				cb->bindIndexBuffer(ixbuf->operator vk::Buffer(), o.index_offset, vk::IndexType::eUint32);
 				cb->drawIndexed(o.index_count, 1, 0, 0, 0);
 			}
+			
+			cb->nextSubpass(vk::SubpassContents::eInline);
+
+			cb->bindPipeline(vk::PipelineBindPoint::eGraphics, directional_light_pl.get());
+			cb->bindDescriptorSets(vk::PipelineBindPoint::eGraphics, light_pl_layout.get(), 0, { light_desc }, {});
+			cb->draw(3, 1, 0, 0);
 
 			cb->nextSubpass(vk::SubpassContents::eInline);
 

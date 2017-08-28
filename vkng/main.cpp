@@ -287,7 +287,7 @@ struct test_app : public app {
 		}
 		cout << "meshes loaded" << endl;
 		
-		rndr = make_unique<renderer::renderer>(&dev, &swp, &shc, &cam, objects);
+		rndr = make_unique<renderer::renderer>(&dev, &swp, &shc, &cam, objects, sky_view.get());
 
 		input_handlers.push_back(&ctrl);
 		cout << "initialization finished!" << endl;

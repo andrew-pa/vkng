@@ -43,6 +43,11 @@ public:
 		return t;
 	}
 
+	inline T unwrap() {
+		if (type) throw runtime_error("tried to unwrap error result");
+		return t;
+	}
+
 	inline bool ok() { return !type; }
 	inline E err() { return e; }
 
