@@ -198,9 +198,9 @@ struct test_app : public app {
 		vector<renderer::object_desc> objects;
 
 		Assimp::Importer imp;
-		auto mesh_path = //string("C:\\Users\\andre\\Source\\vkng\\vkng\\"); 
-						string("C:\\Users\\andre\\Downloads\\3DModels\\sponza\\");
-		auto scene = imp.ReadFile(mesh_path + "sponza.obj", aiProcessPreset_TargetRealtime_Fast);
+		auto mesh_path = string("C:\\Users\\andre\\Source\\vkng\\vkng\\"); 
+						//string("C:\\Users\\andre\\Downloads\\3DModels\\sponza\\");
+		auto scene = imp.ReadFile(mesh_path + "widget.dae", aiProcessPreset_TargetRealtime_Fast);
 		cout << "assimp finished" << endl;
 
 		stbi_set_flip_vertically_on_load(true);
@@ -290,10 +290,13 @@ struct test_app : public app {
 		
 		rndr = make_unique<renderer::renderer>(&dev, &swp, &shc, &cam, objects, sky_view.get());
 
-		rndr->directional_lights.push_back(renderer::directional_light{ {0.f, 1.f, 0.f}, {0.8f, 0.8f, 0.8f} });
-		rndr->directional_lights.push_back(renderer::directional_light{ {1.f, 1.f, 0.1f}, {0.2f, 0.1f, 0.f} });
-		rndr->directional_lights.push_back(renderer::directional_light{ {-1.f, 1.f, 0.1f}, {0.f, 0.1f, 0.2f} });
-		rndr->directional_lights.push_back(renderer::directional_light{ {0.f, -1.f, 1.f}, {0.1f, 0.1f, 0.1f} });
+		rndr->directional_lights.push_back(renderer::directional_light{ {0.f, 1.f, 0.f}, {0.9f, 0.9f, 0.9f} });
+		rndr->directional_lights.push_back(renderer::directional_light{ {0.1f, 1.f, 1.0f}, {0.1f, 0.04f, 0.02f} });
+		rndr->directional_lights.push_back(renderer::directional_light{ {0.1f, 1.f, -1.0f}, {0.1f, 0.05f, 0.01f} });
+		rndr->directional_lights.push_back(renderer::directional_light{ {1.0f, 1.f, .1f}, {0.01f, 0.05f, 0.1f} });
+		rndr->directional_lights.push_back(renderer::directional_light{ {-1.0f, 1.f, .1f}, {0.02f, 0.04f, 0.1f} });
+		rndr->directional_lights.push_back(renderer::directional_light{ {0.f, -1.f, 1.f}, {0.05f, 0.05f, 0.05f} });
+
 
 		input_handlers.push_back(&ctrl);
 		cout << "initialization finished!" << endl;

@@ -141,6 +141,7 @@
     <ClInclude Include="renderer.h" />
     <ClInclude Include="device.h" />
     <ClInclude Include="pipeline.h" />
+    <ClInclude Include="shade.h" />
     <ClInclude Include="stb_image.h" />
     <ClInclude Include="swap_chain.h" />
     <ClInclude Include="timer.h" />
@@ -149,91 +150,90 @@
   <ItemGroup>
     <CustomBuild Include="shader.frag">
       <FileType>Document</FileType>
-      <Command Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">glslangValidator.exe -V "%(FullPath)" -o "$(OutDir)\%(Identity).spv"</Command>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">glslc -I $(ProjectDir) "%(FullPath)" -o "$(OutDir)\%(Identity).spv"</Command>
       <TreatOutputAsContent Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</TreatOutputAsContent>
-      <Command Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">glslangValidator.exe -V "%(FullPath)" -o "$(OutDir)\%(Identity).spv"</Command>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">glslc -I $(ProjectDir) "%(FullPath)" -o "$(OutDir)\%(Identity).spv"</Command>
       <TreatOutputAsContent Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">true</TreatOutputAsContent>
       <Outputs Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">$(OutDir)\%(Identity).spv</Outputs>
       <Outputs Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">$(OutDir)\%(Identity).spv</Outputs>
     </CustomBuild>
     <CustomBuild Include="shader.vert">
       <FileType>Document</FileType>
-      <Command Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">glslangValidator.exe -V "%(FullPath)" -o "$(OutDir)\%(Identity).spv"</Command>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">glslc -I $(ProjectDir) "%(FullPath)" -o "$(OutDir)\%(Identity).spv"</Command>
       <Message Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Compiling Shaders</Message>
       <Outputs Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">$(OutDir)\%(Identity).spv</Outputs>
       <TreatOutputAsContent Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</TreatOutputAsContent>
-      <Command Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">glslangValidator.exe -V "%(FullPath)" -o "$(OutDir)\%(Identity).spv"</Command>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">glslc -I $(ProjectDir) "%(FullPath)" -o "$(OutDir)\%(Identity).spv"</Command>
       <Message Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Compiling Shaders</Message>
       <Outputs Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">$(OutDir)\%(Identity).spv</Outputs>
       <TreatOutputAsContent Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">true</TreatOutputAsContent>
     </CustomBuild>
     <CustomBuild Include="gbuffer.frag">
       <FileType>Document</FileType>
-      <Command Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">glslangValidator.exe -V "%(FullPath)" -o "$(OutDir)\%(Identity).spv"</Command>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">glslc -I $(ProjectDir) "%(FullPath)" -o "$(OutDir)\%(Identity).spv"</Command>
       <Message Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Compiling Shaders</Message>
       <Outputs Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">$(OutDir)\%(Identity).spv</Outputs>
       <TreatOutputAsContent Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</TreatOutputAsContent>
-      <Command Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">glslangValidator.exe -V "%(FullPath)" -o "$(OutDir)\%(Identity).spv"</Command>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">glslc -I $(ProjectDir) "%(FullPath)" -o "$(OutDir)\%(Identity).spv"</Command>
       <Message Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Compiling Shaders</Message>
       <Outputs Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">$(OutDir)\%(Identity).spv</Outputs>
       <TreatOutputAsContent Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">true</TreatOutputAsContent>
     </CustomBuild>
     <CustomBuild Include="fsq.vert">
       <FileType>Document</FileType>
-      <Command Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">glslangValidator.exe -V "%(FullPath)" -o "$(OutDir)\%(Identity).spv"</Command>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">glslc -I $(ProjectDir) "%(FullPath)" -o "$(OutDir)\%(Identity).spv"</Command>
       <Message Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Compiling Shaders</Message>
       <Outputs Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">$(OutDir)\%(Identity).spv</Outputs>
       <TreatOutputAsContent Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</TreatOutputAsContent>
-      <Command Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">glslangValidator.exe -V "%(FullPath)" -o "$(OutDir)\%(Identity).spv"</Command>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">glslc -I $(ProjectDir) "%(FullPath)" -o "$(OutDir)\%(Identity).spv"</Command>
       <Message Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Compiling Shaders</Message>
       <Outputs Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">$(OutDir)\%(Identity).spv</Outputs>
       <TreatOutputAsContent Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">true</TreatOutputAsContent>
     </CustomBuild>
     <CustomBuild Include="directional-light.frag">
       <FileType>Document</FileType>
-      <Command Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">glslangValidator.exe -V "%(FullPath)" -o "$(OutDir)\%(Identity).spv"</Command>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">glslc -I $(ProjectDir) "%(FullPath)" -o "$(OutDir)\%(Identity).spv"</Command>
       <Message Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Compiling Shaders</Message>
       <Outputs Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">$(OutDir)\%(Identity).spv</Outputs>
       <TreatOutputAsContent Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</TreatOutputAsContent>
-      <Command Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">glslangValidator.exe -V "%(FullPath)" -o "$(OutDir)\%(Identity).spv"</Command>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">glslc -I $(ProjectDir) "%(FullPath)" -o "$(OutDir)\%(Identity).spv"</Command>
       <Message Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Compiling Shaders</Message>
       <Outputs Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">$(OutDir)\%(Identity).spv</Outputs>
       <TreatOutputAsContent Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">true</TreatOutputAsContent>
     </CustomBuild>
     <CustomBuild Include="postprocess.frag">
       <FileType>Document</FileType>
-      <Command Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">glslangValidator.exe -V "%(FullPath)" -o "$(OutDir)\%(Identity).spv"</Command>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">glslc -I $(ProjectDir) "%(FullPath)" -o "$(OutDir)\%(Identity).spv"</Command>
       <Message Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Compiling Shaders</Message>
       <Outputs Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">$(OutDir)\%(Identity).spv</Outputs>
       <TreatOutputAsContent Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</TreatOutputAsContent>
-      <Command Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">glslangValidator.exe -V "%(FullPath)" -o "$(OutDir)\%(Identity).spv"</Command>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">glslc -I $(ProjectDir) "%(FullPath)" -o "$(OutDir)\%(Identity).spv"</Command>
       <Message Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Compiling Shaders</Message>
       <Outputs Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">$(OutDir)\%(Identity).spv</Outputs>
       <TreatOutputAsContent Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">true</TreatOutputAsContent>
     </CustomBuild>
-   <CustomBuild Include="skybox.vert">
+    <CustomBuild Include="skybox.vert">
       <FileType>Document</FileType>
-      <Command Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">glslangValidator.exe -V "%(FullPath)" -o "$(OutDir)\%(Identity).spv"</Command>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">glslc -I $(ProjectDir) "%(FullPath)" -o "$(OutDir)\%(Identity).spv"</Command>
       <Message Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Compiling Shaders</Message>
       <Outputs Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">$(OutDir)\%(Identity).spv</Outputs>
       <TreatOutputAsContent Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</TreatOutputAsContent>
-      <Command Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">glslangValidator.exe -V "%(FullPath)" -o "$(OutDir)\%(Identity).spv"</Command>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">glslc -I $(ProjectDir) "%(FullPath)" -o "$(OutDir)\%(Identity).spv"</Command>
       <Message Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Compiling Shaders</Message>
       <Outputs Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">$(OutDir)\%(Identity).spv</Outputs>
       <TreatOutputAsContent Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">true</TreatOutputAsContent>
     </CustomBuild>
     <CustomBuild Include="skybox.frag">
       <FileType>Document</FileType>
-      <Command Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">glslangValidator.exe -V "%(FullPath)" -o "$(OutDir)\%(Identity).spv"</Command>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">glslc -I $(ProjectDir) "%(FullPath)" -o "$(OutDir)\%(Identity).spv"</Command>
       <Message Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Compiling Shaders</Message>
       <Outputs Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">$(OutDir)\%(Identity).spv</Outputs>
       <TreatOutputAsContent Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</TreatOutputAsContent>
-      <Command Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">glslangValidator.exe -V "%(FullPath)" -o "$(OutDir)\%(Identity).spv"</Command>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">glslc -I $(ProjectDir) "%(FullPath)" -o "$(OutDir)\%(Identity).spv"</Command>
       <Message Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Compiling Shaders</Message>
       <Outputs Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">$(OutDir)\%(Identity).spv</Outputs>
       <TreatOutputAsContent Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">true</TreatOutputAsContent>
     </CustomBuild>
-   
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

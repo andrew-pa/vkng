@@ -213,11 +213,11 @@ namespace vkng {
 			//create pipeline layouts
 			smp_pl_layout = dev->dev->createPipelineLayoutUnique(vk::PipelineLayoutCreateInfo{
 				vk::PipelineLayoutCreateFlags(), 1, &obj_desc_layout.get(),
-				1, &vk::PushConstantRange{vk::ShaderStageFlagBits::eVertex, 0, sizeof(mat4)} //push constant for view_proj
+				1, &vk::PushConstantRange{vk::ShaderStageFlagBits::eVertex, 0, sizeof(mat4)*2} //push constant for view, proj
 			});
 			directional_light_pl_layout = dev->dev->createPipelineLayoutUnique(vk::PipelineLayoutCreateInfo{
 				vk::PipelineLayoutCreateFlags(), 1, &light_desc_layout.get(),
-				1, &vk::PushConstantRange{vk::ShaderStageFlagBits::eFragment, 0, sizeof(directional_light)} //push constant for view_proj
+				1, &vk::PushConstantRange{vk::ShaderStageFlagBits::eFragment, 0, sizeof(directional_light)} //push constant for light data
 			});
 			skybox_pl_layout = dev->dev->createPipelineLayoutUnique(vk::PipelineLayoutCreateInfo{
 				vk::PipelineLayoutCreateFlags(), 1, &postprocess_desc_layout.get(),
@@ -517,7 +517,7 @@ namespace vkng {
 
 			// - Draw Objects -
 			cb->bindPipeline(vk::PipelineBindPoint::eGraphics, gbuf_pl.get());
-			cb->pushConstants<mat4>(smp_pl_layout.get(), vk::ShaderStageFlagBits::eVertex, 0, { cam->_proj * cam->_view });
+			cb->pushConstants<mat4>(smp_pl_layout.get(), vk::ShaderStageFlagBits::eVertex, 0, { cam->_view, cam->_proj });
 
 			vk::Buffer bufs[] = { vxbuf->operator vk::Buffer() };
 			for (const auto& o : objects) {
