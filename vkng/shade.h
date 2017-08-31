@@ -26,5 +26,5 @@ vec3 shade(in vec3 base_color, in float roughness, in float metallic, in sampler
 	spec /= 4.0 * ndl * ndv;
 	vec3 Kdiff = base_color/PI;
 	vec3 Kspec = spec*texture(env, L).xyz*Lcolor;
-	return mix(Kdiff + Kspec, Kspec*base_color, smoothstep(0.2, 0.45, metallic));
+	return vec3(0.);//mix(Kdiff + Kspec, Kspec*base_color, smoothstep(0.2, 0.45, metallic));
 }

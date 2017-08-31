@@ -157,7 +157,7 @@ namespace vkng {
 				vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet, objects.size(), 2, pool_sizes
 			});
 			
-			pool_sizes[0] = { vk::DescriptorType::eCombinedImageSampler, gbuf_count+2 };
+			pool_sizes[0] = { vk::DescriptorType::eCombinedImageSampler, gbuf_count+3 };
 			aux_desc_pool = dev->dev->createDescriptorPoolUnique(vk::DescriptorPoolCreateInfo{
 				vk::DescriptorPoolCreateFlags(), 3, 1, pool_sizes
 			});
@@ -169,6 +169,7 @@ namespace vkng {
 			});
 			light_desc_layout = dev->create_desc_set_layout({
 				vk::DescriptorSetLayoutBinding{0, vk::DescriptorType::eCombinedImageSampler, gbuf_count, vk::ShaderStageFlagBits::eFragment},
+				vk::DescriptorSetLayoutBinding{1, vk::DescriptorType::eCombinedImageSampler, 1, vk::ShaderStageFlagBits::eFragment},
 			});
 			postprocess_desc_layout = dev->create_desc_set_layout({
 				vk::DescriptorSetLayoutBinding{0, vk::DescriptorType::eCombinedImageSampler, 1, vk::ShaderStageFlagBits::eFragment},
@@ -207,6 +208,8 @@ namespace vkng {
 				vk::ImageLayout::eShaderReadOnlyOptimal };
 			writes.push_back(vk::WriteDescriptorSet{ skybox_desc, 0, 0, 1,
 				vk::DescriptorType::eCombinedImageSampler, &sky_info });
+			writes.push_back(vk::WriteDescriptorSet{ light_desc, 1, 0, 1,
+				vk::DescriptorType::eCombinedImageSampler, &sky_info });
 
 			dev->dev->updateDescriptorSets(writes, {});
 
@@ -215,9 +218,8 @@ namespace vkng {
 				vk::PipelineLayoutCreateFlags(), 1, &obj_desc_layout.get(),
 				1, &vk::PushConstantRange{vk::ShaderStageFlagBits::eVertex, 0, sizeof(mat4)*2} //push constant for view, proj
 			});
-			directional_light_pl_layout = dev->dev->createPipelineLayoutUnique(vk::PipelineLayoutCreateInfo{
+			sky_light_pl_layout = dev->dev->createPipelineLayoutUnique(vk::PipelineLayoutCreateInfo{
 				vk::PipelineLayoutCreateFlags(), 1, &light_desc_layout.get(),
-				1, &vk::PushConstantRange{vk::ShaderStageFlagBits::eFragment, 0, sizeof(directional_light)} //push constant for light data
 			});
 			skybox_pl_layout = dev->dev->createPipelineLayoutUnique(vk::PipelineLayoutCreateInfo{
 				vk::PipelineLayoutCreateFlags(), 1, &postprocess_desc_layout.get(),
@@ -417,7 +419,7 @@ namespace vkng {
 			vertexInputInfo.vertexAttributeDescriptionCount = 0;
 			vertexInputInfo.vertexBindingDescriptionCount = 0;
 			shaderStages[0].module = (VkShaderModule)shc->load_shader("fsq.vert.spv").unwrap();
-			shaderStages[1].module = (VkShaderModule)shc->load_shader("directional-light.frag.spv").unwrap();
+			shaderStages[1].module = (VkShaderModule)shc->load_shader("sky-light.frag.spv").unwrap();
 			colorBlending.attachmentCount = 1;
 			blend_att_state[0].blendEnable = VK_TRUE;
 			blend_att_state[0].colorBlendOp = VK_BLEND_OP_ADD;
@@ -427,8 +429,8 @@ namespace vkng {
 			depthStencil.depthWriteEnable = VK_FALSE;
 			rasterizer.cullMode = VK_CULL_MODE_NONE;
 			pipelineInfo.subpass = 1;
-			pipelineInfo.layout = (VkPipelineLayout)directional_light_pl_layout.get();
-			directional_light_pl = dev->dev->createGraphicsPipelineUnique(VK_NULL_HANDLE, pipelineInfo);
+			pipelineInfo.layout = (VkPipelineLayout)sky_light_pl_layout.get();
+			sky_light_pl = dev->dev->createGraphicsPipelineUnique(VK_NULL_HANDLE, pipelineInfo);
 
 			vertexInputInfo.vertexAttributeDescriptionCount = 0;
 			vertexInputInfo.vertexBindingDescriptionCount = 0;
@@ -517,7 +519,8 @@ namespace vkng {
 
 			// - Draw Objects -
 			cb->bindPipeline(vk::PipelineBindPoint::eGraphics, gbuf_pl.get());
-			cb->pushConstants<mat4>(smp_pl_layout.get(), vk::ShaderStageFlagBits::eVertex, 0, { cam->_view, cam->_proj });
+			cb->pushConstants<mat4>(smp_pl_layout.get(), vk::ShaderStageFlagBits::eVertex, 0, { cam->_view });
+			cb->pushConstants<mat4>(smp_pl_layout.get(), vk::ShaderStageFlagBits::eVertex, sizeof(mat4), { cam->_proj });
 
 			vk::Buffer bufs[] = { vxbuf->operator vk::Buffer() };
 			for (const auto& o : objects) {
@@ -531,13 +534,10 @@ namespace vkng {
 			// - Do Lighting -
 			cb->nextSubpass(vk::SubpassContents::eInline);
 
-			// calculate directional lighting
-			cb->bindPipeline(vk::PipelineBindPoint::eGraphics, directional_light_pl.get());
-			cb->bindDescriptorSets(vk::PipelineBindPoint::eGraphics, directional_light_pl_layout.get(), 0, { light_desc }, {});
-			for (const auto& L : directional_lights) {
-				cb->pushConstants<directional_light>(directional_light_pl_layout.get(), vk::ShaderStageFlagBits::eFragment, 0, { L });
-				cb->draw(3, 1, 0, 0);
-			}
+			// calculate image-based lighting from sky
+			cb->bindPipeline(vk::PipelineBindPoint::eGraphics, sky_light_pl.get());
+			cb->bindDescriptorSets(vk::PipelineBindPoint::eGraphics, sky_light_pl_layout.get(), 0, { light_desc }, {});
+			cb->draw(3, 1, 0, 0);
 
 			// draw background with skybox
 			cb->bindPipeline(vk::PipelineBindPoint::eGraphics, skybox_pl.get());

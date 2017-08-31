@@ -24,7 +24,7 @@ out gl_PerVertex {
 
 void main() {
 	vec4 wc = ubo.model * vec4(inPosition, 1.0);
-    gl_Position = pc.view * pc.proj * wc;
+    gl_Position = pc.proj * pc.view * wc;
 	viewCoord = (pc.view * wc).xyz;
 	viewNormal = (pc.view * ubo.model * vec4(inNormal, 0.0)).xyz;
 	texCoord = inTexCoord;

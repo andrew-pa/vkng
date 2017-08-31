@@ -91,13 +91,13 @@
     <CustomBuild Include="fsq.vert">
       <Filter>Shaders</Filter>
     </CustomBuild>
-    <CustomBuild Include="directional-light.frag">
-      <Filter>Shaders</Filter>
-    </CustomBuild>
     <CustomBuild Include="skybox.frag">
       <Filter>Shaders</Filter>
     </CustomBuild>
     <CustomBuild Include="skybox.vert">
+      <Filter>Shaders</Filter>
+    </CustomBuild>
+    <CustomBuild Include="sky-light.frag">
       <Filter>Shaders</Filter>
     </CustomBuild>
   </ItemGroup>

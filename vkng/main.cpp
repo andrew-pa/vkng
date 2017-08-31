@@ -116,16 +116,11 @@ struct test_app : public app {
 		app("Vulkan Engine", vec2(1280, 960)),
 		dev(this), swp(this, &dev),
 		shc(&dev),
-		cam(vec2(1280, 960), vec3(0.f, 5.f, 5.f), vec3(0.f), vec3(0.f, 1.f, 0.f), 
-			pi<float>()/3.f, 1.f, 3500.f),
+		cam(vec2(1280, 960), vec3(0.f, 5.f, 5.f), vec3(0.f), vec3(0.f, 1.f, 0.f),
+			pi<float>() / 3.f, 1.f, 3500.f),
 		ctrl(cam, vec3(100.f))
 	{
-		/*vector<renderer::vertex> vertices;
-		vector<uint32> indices;
-		generate_torus(vec2(1.f, 0.5f), 32, [&vertices](auto p, auto n, auto tg, auto tx) {
-			vertices.push_back({ p,n,tg,tx });
-		}, [&indices](auto ix) { indices.push_back(ix); });*/
-	
+
 		// load squid texture
 		int w, h, ch;
 		auto img = stbi_load("C:\\Users\\andre\\Source\\vkng\\vkng\\tex.png", &w, &h, &ch, STBI_rgb_alpha);
@@ -137,23 +132,23 @@ struct test_app : public app {
 		imgsb.unmap();
 
 		auto subresrange = vk::ImageSubresourceRange{ vk::ImageAspectFlagBits::eColor, 0,1,0,1 };
-		tex = make_unique<image>(&dev, vk::ImageType::e2D, vk::Extent3D(w, h, 1), vk::Format::eR8G8B8A8Unorm, vk::ImageTiling::eOptimal, 
+		tex = make_unique<image>(&dev, vk::ImageType::e2D, vk::Extent3D(w, h, 1), vk::Format::eR8G8B8A8Unorm, vk::ImageTiling::eOptimal,
 			vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eSampled, vk::MemoryPropertyFlagBits::eDeviceLocal,
 			&tex_view, vk::ImageViewType::e2D, subresrange);
 
 		auto cb = move(dev.alloc_cmd_buffers()[0]);
 		cb->begin(vk::CommandBufferBeginInfo{ vk::CommandBufferUsageFlagBits::eOneTimeSubmit });
 		cb->pipelineBarrier(vk::PipelineStageFlagBits::eTopOfPipe, vk::PipelineStageFlagBits::eTopOfPipe, vk::DependencyFlags(), {}, {}, {
-			vk::ImageMemoryBarrier{vk::AccessFlags(), vk::AccessFlagBits::eTransferWrite, vk::ImageLayout::eUndefined, vk::ImageLayout::eTransferDstOptimal, 
+			vk::ImageMemoryBarrier{vk::AccessFlags(), vk::AccessFlagBits::eTransferWrite, vk::ImageLayout::eUndefined, vk::ImageLayout::eTransferDstOptimal,
 				VK_QUEUE_FAMILY_IGNORED, VK_QUEUE_FAMILY_IGNORED, tex->operator vk::Image(), subresrange}
 		});
 
 		cb->copyBufferToImage(imgsb, tex->operator vk::Image(), vk::ImageLayout::eTransferDstOptimal, {
 			vk::BufferImageCopy{0, 0, 0, vk::ImageSubresourceLayers{vk::ImageAspectFlagBits::eColor, 0, 0, 1}, {0,0,0}, {(uint32_t)w,(uint32_t)h,1}}
 		});
-		
+
 		cb->pipelineBarrier(vk::PipelineStageFlagBits::eTopOfPipe, vk::PipelineStageFlagBits::eTopOfPipe, vk::DependencyFlags(), {}, {}, {
-			vk::ImageMemoryBarrier{vk::AccessFlagBits::eTransferWrite, vk::AccessFlagBits::eShaderRead, vk::ImageLayout::eTransferDstOptimal, vk::ImageLayout::eShaderReadOnlyOptimal, 
+			vk::ImageMemoryBarrier{vk::AccessFlagBits::eTransferWrite, vk::AccessFlagBits::eShaderRead, vk::ImageLayout::eTransferDstOptimal, vk::ImageLayout::eShaderReadOnlyOptimal,
 				VK_QUEUE_FAMILY_IGNORED, VK_QUEUE_FAMILY_IGNORED, tex->operator vk::Image(), subresrange}
 		});
 
@@ -166,7 +161,7 @@ struct test_app : public app {
 				img_data.push_back(stbi_load((cubemap_path + path).c_str(), &w, &h, &ch, STBI_rgb_alpha));
 			}
 			img_size = w*h * 4;
-			sky_staging = make_unique<buffer>(&dev, img_size * img_data.size(), vk::BufferUsageFlagBits::eTransferSrc, 
+			sky_staging = make_unique<buffer>(&dev, img_size * img_data.size(), vk::BufferUsageFlagBits::eTransferSrc,
 				vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
 			auto data = (char*)sky_staging->map();
 			vector<vk::BufferImageCopy> copy_descs;
@@ -193,13 +188,13 @@ struct test_app : public app {
 					VK_QUEUE_FAMILY_IGNORED, VK_QUEUE_FAMILY_IGNORED, sky->operator vk::Image(), subresrange}
 			});
 		}
-		
+
 		// load scene
 		vector<renderer::object_desc> objects;
 
 		Assimp::Importer imp;
-		auto mesh_path = string("C:\\Users\\andre\\Source\\vkng\\vkng\\"); 
-						//string("C:\\Users\\andre\\Downloads\\3DModels\\sponza\\");
+		auto mesh_path = string("C:\\Users\\andre\\Source\\vkng\\vkng\\");
+		//string("C:\\Users\\andre\\Downloads\\3DModels\\sponza\\");
 		auto scene = imp.ReadFile(mesh_path + "widget.dae", aiProcessPreset_TargetRealtime_Fast);
 		cout << "assimp finished" << endl;
 
@@ -256,7 +251,7 @@ struct test_app : public app {
 		dev.graphics_qu.submit({ vk::SubmitInfo{0, nullptr, nullptr, 1, &cb.get()} }, nullptr); // start actually copying stuff while we create everything else
 		cout << "textures loaded" << endl;
 
-		stack<aiNode*> nodes;
+		/*stack<aiNode*> nodes;
 		nodes.push(scene->mRootNode);
 		while (!nodes.empty()) {
 			auto node = nodes.top(); nodes.pop();
@@ -285,27 +280,26 @@ struct test_app : public app {
 				if (pdtv != diffuse_texture_views.end()) tv = pdtv->second.get();
 				objects.push_back({ vertices, indices, conv(node->mTransformation), tv });
 			}
+		}*/
+		{
+			vector<renderer::vertex> vertices;
+			vector<uint32> indices;
+			generate_torus(vec2(2.f, 0.5f), 32, [&vertices](auto p, auto n, auto tg, auto tx) {
+				vertices.push_back({ p,n,tg,tx });
+			}, [&indices](auto ix) { indices.push_back(ix); });
+			objects.push_back({ vertices, indices, mat4(1), tex_view.get() });
 		}
+
 		cout << "meshes loaded" << endl;
 		
 		rndr = make_unique<renderer::renderer>(&dev, &swp, &shc, &cam, objects, sky_view.get());
-
-		rndr->directional_lights.push_back(renderer::directional_light{ {0.f, 1.f, 0.f}, {0.9f, 0.9f, 0.9f} });
-		rndr->directional_lights.push_back(renderer::directional_light{ {0.1f, 1.f, 1.0f}, {0.1f, 0.04f, 0.02f} });
-		rndr->directional_lights.push_back(renderer::directional_light{ {0.1f, 1.f, -1.0f}, {0.1f, 0.05f, 0.01f} });
-		rndr->directional_lights.push_back(renderer::directional_light{ {1.0f, 1.f, .1f}, {0.01f, 0.05f, 0.1f} });
-		rndr->directional_lights.push_back(renderer::directional_light{ {-1.0f, 1.f, .1f}, {0.02f, 0.04f, 0.1f} });
-		rndr->directional_lights.push_back(renderer::directional_light{ {0.f, -1.f, 1.f}, {0.05f, 0.05f, 0.05f} });
-
 
 		input_handlers.push_back(&ctrl);
 		cout << "initialization finished!" << endl;
 	}
 
 	void update(float t, float dt) override {
-		/*for (int i = 0; i < 1; ++i) {
-			*rndr->objects[i].transform = rotate(mat4(1), t*2.f, vec3(0.2f, 0.6f, 0.4f));
-		}*/
+		*rndr->objects[rndr->objects.size()-1].transform = rotate(mat4(1), t*2.f, vec3(0.2f, 0.6f, 0.4f));
 		ctrl.update(t, dt);
 	}
 	void resize() override {
