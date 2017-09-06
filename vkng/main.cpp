@@ -86,6 +86,64 @@ void generate_torus(vec2 r, int div, function<void(vec3, vec3, vec3, vec2)> vert
 	}
 }
 
+void generate_sphere(float radius, uint slice_count, uint stack_count, function<void(vec3,vec3,vec3,vec2)> vertex, function<void(uint32_t)> index)
+{
+	vertex(vec3(0.f, radius, 0.f), vec3(0, 1, 0), vec3(1, 0, 0), vec2(0, 0));
+
+	float dphi = pi<float>() / stack_count;
+	float dtheta = 2.f*pi<float>() / slice_count;
+
+	for (uint i = 1; i <= stack_count - 1; ++i)
+	{
+		float phi = i*dphi;
+		for (uint j = 0; j <= slice_count; ++j)
+		{
+			float theta = j*dtheta;
+			vec3 p = vec3(radius*sinf(phi)*cosf(theta),
+				radius*cosf(phi),
+				radius*sinf(phi)*sinf(theta));
+			vec3 t = normalize(vec3(-radius*sinf(phi)*sinf(theta),
+				0.f,
+				radius*sinf(phi)*cosf(theta)));
+			vertex(p, normalize(p), t, vec2(theta / (2.f*pi<float>()), phi / (2.f*pi<float>())));
+
+		}
+	}
+
+	vertex(vec3(0.f, -radius, 0.f), vec3(0, -1, 0), vec3(1, 0, 0), vec2(0, 1));
+
+	for (uint32_t i = 1; i <= slice_count; ++i)
+	{
+		index(0);
+		index(i + 1);
+		index(i);
+	}
+
+	uint32_t bi = 1;
+	uint32_t rvc = slice_count + 1;
+	for (uint32_t i = 0; i < stack_count - 2; ++i)
+	{
+		for (uint j = 0; j < slice_count; ++j)
+		{
+			index(bi + i*rvc + j);
+			index(bi + i*rvc + j + 1);
+			index(bi + (i + 1)*rvc + j);
+			index(bi + (i + 1)*rvc + j);
+			index(bi + (i*rvc + j + 1));
+			index(bi + (i + 1)*rvc + j + 1);
+		}
+	}
+
+	uint32_t spi = (uint32_t)(1+(stack_count-1)*slice_count);
+	bi = spi - rvc;
+	for (uint i = 0; i < slice_count; ++i)
+	{
+		index(spi);
+		index(bi + i);
+		index(bi + i + 1);
+	}
+}
+
 
 inline vec3 conv(aiVector3D v) {
 	return vec3(v.x, v.y, v.z);
@@ -284,7 +342,9 @@ struct test_app : public app {
 		{
 			vector<renderer::vertex> vertices;
 			vector<uint32> indices;
-			generate_torus(vec2(2.f, 0.5f), 32, [&vertices](auto p, auto n, auto tg, auto tx) {
+			//generate_torus(vec2(2.f, 0.5f), 32,
+			generate_sphere(1.f, 64.f, 64.f,
+				[&vertices](auto p, auto n, auto tg, auto tx) {
 				vertices.push_back({ p,n,tg,tx });
 			}, [&indices](auto ix) { indices.push_back(ix); });
 			objects.push_back({ vertices, indices, mat4(1), tex_view.get() });
