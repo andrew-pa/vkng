@@ -12,9 +12,16 @@ layout(location = 3) out vec4 outStuff;
 
 layout(binding = 1) uniform sampler2D tex;
 
+layout(binding = 0) uniform object{
+	mat4 world;
+	vec4 base_color;
+	float roughness, metallic;
+	vec2 padding;
+} mat;
+
 void main() {
 	outPosition = vec4(viewCoord*.5+.5,0.f);
 	outNormal = vec4(viewNormal*.5+.5,1.f);
-    outColor = texture(tex, texCoord);
-	outStuff = gl_FragCoord;
+    outColor = texture(tex, texCoord) * mat.base_color;
+	outStuff = vec4(mat.roughness, mat.metallic, mat.padding);
 }

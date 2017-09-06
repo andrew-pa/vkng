@@ -150,7 +150,7 @@ namespace vkng {
 			//create descriptor pools, layouts & sets 
 			// - pool
 			vk::DescriptorPoolSize pool_sizes[] = {
-				{ vk::DescriptorType::eUniformBuffer, objects.size() },
+				{ vk::DescriptorType::eUniformBuffer, objects.size()*2 },
 				{ vk::DescriptorType::eCombinedImageSampler, objects.size() },
 			};
 			obj_desc_pool = dev->dev->createDescriptorPoolUnique(vk::DescriptorPoolCreateInfo{
@@ -164,8 +164,8 @@ namespace vkng {
 
 			// - layout
 			obj_desc_layout = dev->create_desc_set_layout({
-				vk::DescriptorSetLayoutBinding{0, vk::DescriptorType::eUniformBuffer, 1, vk::ShaderStageFlagBits::eVertex},
-				vk::DescriptorSetLayoutBinding{1, vk::DescriptorType::eCombinedImageSampler, 1, vk::ShaderStageFlagBits::eFragment}
+				vk::DescriptorSetLayoutBinding{0, vk::DescriptorType::eUniformBuffer, 1, vk::ShaderStageFlagBits::eVertex|vk::ShaderStageFlagBits::eFragment},
+				vk::DescriptorSetLayoutBinding{1, vk::DescriptorType::eCombinedImageSampler, 1, vk::ShaderStageFlagBits::eFragment},
 			});
 			light_desc_layout = dev->create_desc_set_layout({
 				vk::DescriptorSetLayoutBinding{0, vk::DescriptorType::eCombinedImageSampler, gbuf_count, vk::ShaderStageFlagBits::eFragment},
@@ -187,8 +187,10 @@ namespace vkng {
 			for (size_t i = 0; i < objects.size(); ++i) {
 				objects[i].transform = (mat4*)(((char*)ubuf_map) + i*ubuf_aligned_size);
 				*objects[i].transform = od[i].transform;
+				objects[i].mat = (material*)(((char*)ubuf_map) + i*ubuf_aligned_size + sizeof(mat4));
+				*objects[i].mat = od[i].mat;
 				objects[i].descriptor_set = move(sets[i]);
-				ubuf_ifo[i] = vk::DescriptorBufferInfo{ ubuf->operator vk::Buffer(), i*ubuf_aligned_size, sizeof(mat4) };
+				ubuf_ifo[i] = vk::DescriptorBufferInfo{ ubuf->operator vk::Buffer(), i*ubuf_aligned_size, sizeof(mat4)+sizeof(material) };
 				writes.push_back(vk::WriteDescriptorSet{ objects[i].descriptor_set.get(), 0, 0, 1,
 					vk::DescriptorType::eUniformBuffer, nullptr, &ubuf_ifo[i] });
 				dftx_ifo[i] = vk::DescriptorImageInfo{ fsmp.get(), od[i].diffuse_texture, vk::ImageLayout::eShaderReadOnlyOptimal };
@@ -519,8 +521,7 @@ namespace vkng {
 
 			// - Draw Objects -
 			cb->bindPipeline(vk::PipelineBindPoint::eGraphics, gbuf_pl.get());
-			cb->pushConstants<mat4>(smp_pl_layout.get(), vk::ShaderStageFlagBits::eVertex, 0, { cam->_view });
-			cb->pushConstants<mat4>(smp_pl_layout.get(), vk::ShaderStageFlagBits::eVertex, sizeof(mat4), { cam->_proj });
+			cb->pushConstants<mat4>(smp_pl_layout.get(), vk::ShaderStageFlagBits::eVertex, 0, { cam->_view, cam->_proj });
 
 			vk::Buffer bufs[] = { vxbuf->operator vk::Buffer() };
 			for (const auto& o : objects) {

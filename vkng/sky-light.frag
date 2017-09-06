@@ -1,6 +1,30 @@
 #version 450
 #extension GL_ARB_separate_shader_objects : enable
 
+float hash( const float n ) {
+	return fract(sin(n)*43758.54554213);
+}
+vec2 hash2( const float n ) {
+	return fract(sin(vec2(n,n+1.))*vec2(43758.5453123));
+}
+vec2 hash2( const vec2 n ) {
+	return fract(sin(vec2( n.x*n.y, n.x+n.y))*vec2(25.1459123,312.3490423));
+}
+vec3 hash3( const vec2 n ) {
+	return fract(sin(vec3(n.x, n.y, n+2.0))*vec3(36.5453123,43.1459123,11234.3490423));
+}
+vec3 chs( const vec3 n, const vec2 rv2 ) {
+	vec3  uu = normalize( cross( n, vec3(0.0,1.0,1.0) ) );
+	vec3  vv = cross( uu, n );
+	
+	float ra = sqrt(rv2.y);
+	float rx = ra*cos(6.2831*rv2.x); 
+	float ry = ra*sin(6.2831*rv2.x);
+	float rz = sqrt( 1.0-rv2.y );
+	vec3  rr = vec3( rx*uu + ry*vv + rz*n );
+
+	return normalize( rr );
+}
 #define PI 3.14159
 
 float fresnel_schlick(in float vdh, in float f0) {
@@ -27,7 +51,7 @@ vec3 shade(in vec3 base_color, in float roughness, in float metallic, in sampler
 				ndv = saturate(dot(N, V));
 
 	const float alpha2 = roughness*roughness;
-	float D = distribution_ggx(ndh, alpha2), F = fresnel_schlick(vdh, metallic), G = geometry_ggx(ldh, alpha2)*geometry_ggx(vdh, alpha2);
+	float D = distribution_ggx(ndh, alpha2), F = fresnel_schlick(vdh, metallic), G = saturate(geometry_ggx(ldh, alpha2)*geometry_ggx(vdh, alpha2));
 	float spec = saturate(D*F*G / (4.0 * ndl * ndv));
 	vec3 Kdiff = base_color/PI;
 	vec3 Kspec = spec*Lcolor;
@@ -49,14 +73,16 @@ void main() {
 	if(norm_exist.w < 1.) {
 		discard;
 	}
+	vec4 mat = texture(gbuffer[3], texCoord);
 	vec3 N = normalize(norm_exist.xyz*2.-1.);
 	const vec3 V = vec3(0., 0., 1.); // we're in view space already
 
 	// calculate reflected light by integrating
 	vec3 col = vec3(0.);
 	for(int i = 0; i < 20; ++i) {
-		const vec3 L = vec3(0., 1., 0.);
-		col += shade(texc, 0.9, 0.02, env, L, vec3(1.), N, V);
+		vec3 L = chs(-N, hash2(hash2(texCoord) + float(i)*24.0) );
+		vec3 Lc =  texture(env, -L).xyz;
+		col += shade(texc, mat.x, mat.y, env, L, Lc, N, V);// * saturate(dot(N, L));
 	}
 
 	outColor = vec4(col / 20., 1.);

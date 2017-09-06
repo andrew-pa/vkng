@@ -28,11 +28,19 @@ namespace vkng {
 			}
 		};
 		
+		struct material {
+			vec4 base_color;
+			float roughness, metallic;
+			vec2 padding;
+			material(vec3 base, float r, float m = 0.02) : base_color(base, 1.f), roughness(r), metallic(m) {}
+		};
+
 		struct object_desc {
 			vector<vertex> vertices;
 			vector<uint32> indices;
 			mat4 transform;
 			vk::ImageView diffuse_texture;
+			material mat;
 		};
 
 		struct object {
@@ -40,6 +48,7 @@ namespace vkng {
 			vk::DeviceSize vertex_offset, index_offset;
 			vk::UniqueDescriptorSet descriptor_set;
 			mat4* transform;
+			material* mat;
 		};
 
 		/*

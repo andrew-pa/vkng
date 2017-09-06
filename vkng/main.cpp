@@ -180,8 +180,8 @@ struct test_app : public app {
 	{
 
 		// load squid texture
-		int w, h, ch;
-		auto img = stbi_load("C:\\Users\\andre\\Source\\vkng\\vkng\\tex.png", &w, &h, &ch, STBI_rgb_alpha);
+		int w = 1, h = 1, ch;
+		auto img = &u8vec4(255, 255, 255, 255);//stbi_load("C:\\Users\\andre\\Source\\vkng\\vkng\\tex.png", &w, &h, &ch, STBI_rgb_alpha);
 		vk::DeviceSize img_size = w*h * 4;
 
 		auto imgsb = buffer(&dev, img_size, vk::BufferUsageFlagBits::eTransferSrc, vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
@@ -347,7 +347,7 @@ struct test_app : public app {
 				[&vertices](auto p, auto n, auto tg, auto tx) {
 				vertices.push_back({ p,n,tg,tx });
 			}, [&indices](auto ix) { indices.push_back(ix); });
-			objects.push_back({ vertices, indices, mat4(1), tex_view.get() });
+			objects.push_back({ vertices, indices, mat4(1), tex_view.get(), renderer::material(vec3(1.f), 1.f, 0.02f) });
 		}
 
 		cout << "meshes loaded" << endl;
@@ -359,7 +359,8 @@ struct test_app : public app {
 	}
 
 	void update(float t, float dt) override {
-		*rndr->objects[rndr->objects.size()-1].transform = rotate(mat4(1), t*2.f, vec3(0.2f, 0.6f, 0.4f));
+		//*rndr->objects[rndr->objects.size()-1].transform = rotate(mat4(1), t*2.f, vec3(0.2f, 0.6f, 0.4f));
+		//rndr->objects[rndr->objects.size() - 1].mat->base_color = abs(vec4(sin(t), cos(t), 1.f - sin(t), 1.f));
 		ctrl.update(t, dt);
 	}
 	void resize() override {
