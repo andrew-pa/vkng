@@ -113,7 +113,8 @@ namespace vkng {
 		vmaDestroyBuffer(dev->allocator, buf, alloc);
 	}
 
-	image::image(device * dev, vk::ImageCreateFlags flg, vk::ImageType type, vk::Extent3D size, vk::Format fmt, vk::ImageTiling til, vk::ImageUsageFlags use, vk::MemoryPropertyFlags memuse,
+	image::image(device * dev, vk::ImageCreateFlags flg, vk::ImageType type, vk::Extent3D size,
+			vk::Format fmt, vk::ImageTiling til, vk::ImageUsageFlags use, vk::MemoryPropertyFlags memuse,
 			size_t mip_count, size_t array_layers,
 			optional<vk::UniqueImageView*> iv, vk::ImageViewType iv_type, vk::ImageSubresourceRange iv_sr) :dev(dev) {
 		VmaMemoryRequirements mreq = {};
@@ -128,6 +129,69 @@ namespace vkng {
 			**iv = dev->dev->createImageViewUnique(vk::ImageViewCreateInfo(vk::ImageViewCreateFlags(), vk::Image(img),
 				iv_type, fmt,
 				vk::ComponentMapping(), iv_sr));
+		}
+	}
+	void image::generate_mipmaps(size_t w, size_t h, vk::CommandBuffer cb, size_t layer_count) {
+		auto subresrange = vk::ImageSubresourceRange{ vk::ImageAspectFlagBits::eColor, 0,1,0,layer_count };
+		// transition the biggest mipmap (the loaded src image) so that it can be copied from
+		cb.pipelineBarrier(vk::PipelineStageFlagBits::eTransfer, vk::PipelineStageFlagBits::eTransfer, vk::DependencyFlags(), {}, {}, {
+			vk::ImageMemoryBarrier{vk::AccessFlags(), vk::AccessFlagBits::eTransferRead, vk::ImageLayout::eUndefined, vk::ImageLayout::eTransferSrcOptimal,
+			VK_QUEUE_FAMILY_IGNORED, VK_QUEUE_FAMILY_IGNORED, vk::Image(img), subresrange}
+		});
+
+		const size_t count = calculate_mipmap_count(w, h);
+
+		// transition all the other mip levels to write mode so we can blit to them
+		subresrange.baseMipLevel = 1;
+		subresrange.levelCount = count - 1;
+		cb.pipelineBarrier(vk::PipelineStageFlagBits::eTransfer, vk::PipelineStageFlagBits::eTransfer, vk::DependencyFlags(), {}, {}, {
+			vk::ImageMemoryBarrier{vk::AccessFlags(), vk::AccessFlagBits::eTransferWrite, vk::ImageLayout::eUndefined, vk::ImageLayout::eTransferDstOptimal,
+			VK_QUEUE_FAMILY_IGNORED, VK_QUEUE_FAMILY_IGNORED, vk::Image(img), subresrange}
+		});
+		subresrange.levelCount = 1;
+
+		vk::ImageBlit region;
+		region.dstSubresource.aspectMask = region.srcSubresource.aspectMask = vk::ImageAspectFlagBits::eColor;
+		region.dstSubresource.layerCount = region.srcSubresource.layerCount = layer_count;
+		for (size_t i = 1; i < count; ++i) {
+			region.srcSubresource.mipLevel = i - 1;
+			region.dstSubresource.mipLevel = i;
+			region.srcOffsets[1].x = glm::max(w >> (i - 1), 1u);
+			region.srcOffsets[1].y = glm::max(h >> (i - 1), 1u);
+			region.srcOffsets[1].z = 1;
+			region.dstOffsets[1].x = glm::max(w >> i, 1u);
+			region.dstOffsets[1].y = glm::max(h >> i, 1u);
+			region.dstOffsets[1].z = 1;
+
+			// copy the last mip level to the next mip level while filtering
+			cb.blitImage(vk::Image(img), vk::ImageLayout::eTransferSrcOptimal, vk::Image(img), vk::ImageLayout::eTransferDstOptimal,
+				{ region }, vk::Filter::eLinear);
+
+			// transition the last mip level to shader read as we don't need it anymore
+			subresrange.baseMipLevel = i - 1;
+			cb.pipelineBarrier(vk::PipelineStageFlagBits::eTransfer, vk::PipelineStageFlagBits::eFragmentShader, vk::DependencyFlags(), {}, {}, {
+					vk::ImageMemoryBarrier{vk::AccessFlagBits::eTransferWrite, vk::AccessFlagBits::eShaderRead,
+						vk::ImageLayout::eTransferDstOptimal, vk::ImageLayout::eShaderReadOnlyOptimal,
+						VK_QUEUE_FAMILY_IGNORED, VK_QUEUE_FAMILY_IGNORED, vk::Image(img), subresrange}
+			});
+
+			subresrange.baseMipLevel = i;
+			if (i + 1 < count) {
+				//transition this mip level to read mode from write mode
+				cb.pipelineBarrier(vk::PipelineStageFlagBits::eTransfer, vk::PipelineStageFlagBits::eTransfer, vk::DependencyFlags(), {}, {}, {
+						vk::ImageMemoryBarrier{vk::AccessFlagBits::eTransferWrite, vk::AccessFlagBits::eTransferRead,
+						vk::ImageLayout::eTransferDstOptimal, vk::ImageLayout::eTransferSrcOptimal,
+							VK_QUEUE_FAMILY_IGNORED, VK_QUEUE_FAMILY_IGNORED, vk::Image(img), subresrange}
+				});
+			}
+			else {
+				// transtion this mip level to shader read mode as it's the last mip level
+				cb.pipelineBarrier(vk::PipelineStageFlagBits::eTransfer, vk::PipelineStageFlagBits::eFragmentShader, vk::DependencyFlags(), {}, {}, {
+						vk::ImageMemoryBarrier{vk::AccessFlagBits::eTransferWrite, vk::AccessFlagBits::eShaderRead,
+						vk::ImageLayout::eTransferDstOptimal, vk::ImageLayout::eShaderReadOnlyOptimal,
+							VK_QUEUE_FAMILY_IGNORED, VK_QUEUE_FAMILY_IGNORED, vk::Image(img), subresrange}
+				});
+			}
 		}
 	}
 	image::~image() {

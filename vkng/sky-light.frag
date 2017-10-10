@@ -42,7 +42,7 @@ float distribution_ggx(in float ndh, in float alpha2) {
 
 #define saturate(v) clamp(v, 0.01, 1.01)
 
-vec3 shade(in vec3 base_color, in float roughness, in float metallic, in samplerCube env, in vec3 L, in vec3 Lcolor, in vec3 N, in vec3 V) {
+vec3 brdf(in vec3 base_color, in float roughness, in float metallic, in samplerCube env, in vec3 L, in vec3 Lcolor, in vec3 N, in vec3 V) {
 	const vec3 H = normalize(V+L);
 	const float ndh = saturate(dot(N, H)),
 				vdh = saturate(dot(V, H)),
@@ -52,10 +52,10 @@ vec3 shade(in vec3 base_color, in float roughness, in float metallic, in sampler
 
 	const float alpha2 = roughness*roughness;
 	float D = distribution_ggx(ndh, alpha2), F = fresnel_schlick(vdh, metallic), G = saturate(geometry_ggx(ldh, alpha2)*geometry_ggx(vdh, alpha2));
-	float spec = saturate(D*F*G / (4.0 * ndl * ndv));
-	vec3 Kdiff = base_color/PI;
+	float spec = F*G*vdh / (ndh*ndv); //D*F*G / (4.0 * ndl * ndv);
+	vec3 Kdiff = base_color;///PI;
 	vec3 Kspec = spec*Lcolor;
-	return mix(Kdiff + Kspec, Kspec*base_color, smoothstep(0.2, 0.45, metallic));
+	return Kdiff; //mix(Kdiff + Kspec, Kspec*base_color, smoothstep(0.2, 0.45, metallic));
 }
 //#include <shade.h>
 
@@ -79,11 +79,12 @@ void main() {
 
 	// calculate reflected light by integrating
 	vec3 col = vec3(0.);
-	for(int i = 0; i < 20; ++i) {
+	for(int i = 0; i < 16; ++i) {
 		vec3 L = chs(-N, hash2(hash2(texCoord) + float(i)*24.0) );
-		vec3 Lc =  texture(env, -L).xyz;
-		col += shade(texc, mat.x, mat.y, env, L, Lc, N, V);// * saturate(dot(N, L));
+		vec3 Lc =  textureLod(env, -L, 3.0).xyz*100.0;
+		col += Lc * brdf(texc, mat.x, mat.y, env, L, Lc, N, V) * saturate(dot(N, L));
 	}
+	
 
-	outColor = vec4(col / 20., 1.);
+	outColor = vec4(col / 16., 1.);
 }

@@ -231,7 +231,8 @@ struct test_app : public app {
 			sky_staging->unmap();
 			subresrange = vk::ImageSubresourceRange{ vk::ImageAspectFlagBits::eColor, 0, 1, 0, 6 };
 			sky = make_unique<image>(&dev, vk::ImageCreateFlagBits::eCubeCompatible, vk::ImageType::e2D, vk::Extent3D(w, h, 1), vk::Format::eR8G8B8A8Unorm, vk::ImageTiling::eOptimal,
-				vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eSampled, vk::MemoryPropertyFlagBits::eDeviceLocal, 1, 6,
+				vk::ImageUsageFlagBits::eTransferSrc | vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eSampled,
+				vk::MemoryPropertyFlagBits::eDeviceLocal, image::calculate_mipmap_count(w,h), 6,
 				&sky_view, vk::ImageViewType::eCube, subresrange);
 
 			cb->pipelineBarrier(vk::PipelineStageFlagBits::eTopOfPipe, vk::PipelineStageFlagBits::eTopOfPipe, vk::DependencyFlags(), {}, {}, {
@@ -240,6 +241,8 @@ struct test_app : public app {
 			});
 
 			cb->copyBufferToImage(sky_staging->operator vk::Buffer(), sky->operator vk::Image(), vk::ImageLayout::eTransferDstOptimal, copy_descs);
+
+			sky->generate_mipmaps(w, h, cb.get(), 6);
 
 			cb->pipelineBarrier(vk::PipelineStageFlagBits::eTopOfPipe, vk::PipelineStageFlagBits::eTopOfPipe, vk::DependencyFlags(), {}, {}, {
 				vk::ImageMemoryBarrier{vk::AccessFlagBits::eTransferWrite, vk::AccessFlagBits::eShaderRead, vk::ImageLayout::eTransferDstOptimal, vk::ImageLayout::eShaderReadOnlyOptimal,
@@ -251,9 +254,9 @@ struct test_app : public app {
 		vector<renderer::object_desc> objects;
 
 		Assimp::Importer imp;
-		auto mesh_path = string("C:\\Users\\andre\\Source\\vkng\\vkng\\");
-		//string("C:\\Users\\andre\\Downloads\\3DModels\\sponza\\");
-		auto scene = imp.ReadFile(mesh_path + "widget.dae", aiProcessPreset_TargetRealtime_Fast);
+		auto mesh_path = //string("C:\\Users\\andre\\Source\\vkng\\vkng\\");
+		string("C:\\Users\\andre\\Downloads\\3DModels\\sponza\\");
+		auto scene = imp.ReadFile(mesh_path + "sponza.obj", aiProcessPreset_TargetRealtime_Fast);
 		cout << "assimp finished" << endl;
 
 		stbi_set_flip_vertically_on_load(true);
@@ -282,8 +285,9 @@ struct test_app : public app {
 
 				auto subresrange = vk::ImageSubresourceRange{ vk::ImageAspectFlagBits::eColor, 0,1,0,1 };
 				vk::UniqueImageView view;
-				diffuse_textures.push_back(make_unique<image>(&dev, vk::ImageType::e2D, vk::Extent3D(w, h, 1), vk::Format::eR8G8B8A8Unorm, vk::ImageTiling::eOptimal,
-					vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eSampled, vk::MemoryPropertyFlagBits::eDeviceLocal,
+				diffuse_textures.push_back(make_unique<image>(&dev, vk::ImageCreateFlags(), vk::ImageType::e2D, vk::Extent3D(w, h, 1), vk::Format::eR8G8B8A8Unorm, vk::ImageTiling::eOptimal,
+					vk::ImageUsageFlagBits::eTransferSrc | vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eSampled,
+					vk::MemoryPropertyFlagBits::eDeviceLocal, image::calculate_mipmap_count(w,h), 1,
 					&view, vk::ImageViewType::e2D, subresrange));
 				auto& tx = diffuse_textures[diffuse_textures.size() - 1];
 
@@ -295,6 +299,8 @@ struct test_app : public app {
 				cb->copyBufferToImage(imgsb->operator vk::Buffer(), tx->operator vk::Image(), vk::ImageLayout::eTransferDstOptimal, {
 					vk::BufferImageCopy{0, 0, 0, vk::ImageSubresourceLayers{vk::ImageAspectFlagBits::eColor, 0, 0, 1}, {0,0,0}, {(uint32_t)w,(uint32_t)h,1}}
 				});
+
+				tx->generate_mipmaps(w, h, cb.get());
 
 				cb->pipelineBarrier(vk::PipelineStageFlagBits::eTopOfPipe, vk::PipelineStageFlagBits::eTopOfPipe, vk::DependencyFlags(), {}, {}, {
 					vk::ImageMemoryBarrier{vk::AccessFlagBits::eTransferWrite, vk::AccessFlagBits::eShaderRead, vk::ImageLayout::eTransferDstOptimal, vk::ImageLayout::eShaderReadOnlyOptimal,
@@ -309,7 +315,7 @@ struct test_app : public app {
 		dev.graphics_qu.submit({ vk::SubmitInfo{0, nullptr, nullptr, 1, &cb.get()} }, nullptr); // start actually copying stuff while we create everything else
 		cout << "textures loaded" << endl;
 
-		/*stack<aiNode*> nodes;
+		stack<aiNode*> nodes;
 		nodes.push(scene->mRootNode);
 		while (!nodes.empty()) {
 			auto node = nodes.top(); nodes.pop();
@@ -336,18 +342,26 @@ struct test_app : public app {
 				vk::ImageView tv = tex_view.get();
 				auto pdtv = diffuse_texture_views.find(mesh->mMaterialIndex);
 				if (pdtv != diffuse_texture_views.end()) tv = pdtv->second.get();
-				objects.push_back({ vertices, indices, conv(node->mTransformation), tv });
+				objects.push_back({ vertices, indices, conv(node->mTransformation), tv, 
+					renderer::material(vec3(1.f), 0.05f, 0.02f) });
 			}
-		}*/
+		}
 		{
 			vector<renderer::vertex> vertices;
 			vector<uint32> indices;
 			//generate_torus(vec2(2.f, 0.5f), 32,
-			generate_sphere(1.f, 64.f, 64.f,
+			generate_sphere(1.f, 32.f, 32.f,
 				[&vertices](auto p, auto n, auto tg, auto tx) {
 				vertices.push_back({ p,n,tg,tx });
 			}, [&indices](auto ix) { indices.push_back(ix); });
-			objects.push_back({ vertices, indices, mat4(1), tex_view.get(), renderer::material(vec3(1.f), 1.f, 0.02f) });
+			for (size_t i = 0; i < 12; ++i) {
+				for (size_t j = 0; j < 12; ++j) {
+					float x = (float)i / 12.f;
+					float y = (float)j / 12.f;
+					objects.push_back({ vertices, indices, translate(mat4(1), vec3(i*2.f, 5.f, j*2.f)),
+						tex_view.get(), renderer::material(vec3(1.f), smoothstep(0.05f, 1.f, x), smoothstep(0.02f, 0.99f, y)) });
+				}
+			}
 		}
 
 		cout << "meshes loaded" << endl;

@@ -130,7 +130,7 @@ namespace vkng {
 
 			//create samplers
 			fsmp = dev->dev->createSamplerUnique(vk::SamplerCreateInfo{
-					vk::SamplerCreateFlags(), vk::Filter::eLinear, vk::Filter::eLinear, vk::SamplerMipmapMode::eNearest, vk::SamplerAddressMode::eRepeat,
+					vk::SamplerCreateFlags(), vk::Filter::eLinear, vk::Filter::eLinear, vk::SamplerMipmapMode::eLinear, vk::SamplerAddressMode::eRepeat,
 					vk::SamplerAddressMode::eRepeat, vk::SamplerAddressMode::eRepeat, 0.f, VK_TRUE, 16.f
 			});
 			nsmp = dev->dev->createSamplerUnique(vk::SamplerCreateInfo{

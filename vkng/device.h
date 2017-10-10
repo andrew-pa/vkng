@@ -33,6 +33,12 @@ namespace vkng {
 			optional<vk::UniqueImageView*> iv = {}, vk::ImageViewType iv_type = {}, vk::ImageSubresourceRange iv_sr = {})
 			: image(dev, vk::ImageCreateFlags(), type, size, fmt, til, use, memuse, 1, 1, iv, iv_type, iv_sr) {}
 
+		void generate_mipmaps(size_t w, size_t h, vk::CommandBuffer cb, size_t layer_count = 1);
+
+		static inline size_t calculate_mipmap_count(size_t w, size_t h) {
+			return floor(log2(glm::min((float)w, (float)h)));
+		}
+
 		operator vk::Image() {
 			return vk::Image(img);
 		}

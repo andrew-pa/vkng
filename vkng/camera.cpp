@@ -72,6 +72,14 @@ namespace vkng {
 				cam_pos_v.z = 1;
 			else if (key == GLFW_KEY_E)
 				cam_pos_v.z = -1;
+			else if (key == GLFW_KEY_UP)
+				cam_rot_v.y = -1;
+			else if (key == GLFW_KEY_DOWN)
+				cam_rot_v.y = -1;
+			else if (key == GLFW_KEY_LEFT)
+				cam_rot_v.x = -1;
+			else if (key == GLFW_KEY_RIGHT)
+				cam_rot_v.x = -1;
 		}
 		else if (action == key_action::release)
 		{
@@ -81,7 +89,12 @@ namespace vkng {
 				cam_pos_v.y = 0.f;
 			else if (key == GLFW_KEY_Q || key == GLFW_KEY_E)
 				cam_pos_v.z = 0.f;
+			else if (key == GLFW_KEY_UP || key == GLFW_KEY_DOWN)
+				cam_rot_v.y = 0.f;
+			else if (key == GLFW_KEY_LEFT || key == GLFW_KEY_RIGHT)
+				cam_rot_v.x = 0.f;
 		}
+
 	}
 	void fps_camera_controller::mouse_position_handler(app * _app, vec2 _p) {
 		if (!mouse_disabled) {
