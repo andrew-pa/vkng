@@ -243,11 +243,6 @@ struct test_app : public app {
 			cb->copyBufferToImage(sky_staging->operator vk::Buffer(), sky->operator vk::Image(), vk::ImageLayout::eTransferDstOptimal, copy_descs);
 
 			sky->generate_mipmaps(w, h, cb.get(), 6);
-
-			cb->pipelineBarrier(vk::PipelineStageFlagBits::eTopOfPipe, vk::PipelineStageFlagBits::eTopOfPipe, vk::DependencyFlags(), {}, {}, {
-				vk::ImageMemoryBarrier{vk::AccessFlagBits::eTransferWrite, vk::AccessFlagBits::eShaderRead, vk::ImageLayout::eTransferDstOptimal, vk::ImageLayout::eShaderReadOnlyOptimal,
-					VK_QUEUE_FAMILY_IGNORED, VK_QUEUE_FAMILY_IGNORED, sky->operator vk::Image(), subresrange}
-			});
 		}
 
 		// load scene
@@ -302,11 +297,6 @@ struct test_app : public app {
 
 				tx->generate_mipmaps(w, h, cb.get());
 
-				cb->pipelineBarrier(vk::PipelineStageFlagBits::eTopOfPipe, vk::PipelineStageFlagBits::eTopOfPipe, vk::DependencyFlags(), {}, {}, {
-					vk::ImageMemoryBarrier{vk::AccessFlagBits::eTransferWrite, vk::AccessFlagBits::eShaderRead, vk::ImageLayout::eTransferDstOptimal, vk::ImageLayout::eShaderReadOnlyOptimal,
-						VK_QUEUE_FAMILY_IGNORED, VK_QUEUE_FAMILY_IGNORED, tx->operator vk::Image(), subresrange}
-				});
-
 				upload_buffers.push_back(move(imgsb));
 				diffuse_texture_views[i] = move(view);
 			}
@@ -343,7 +333,7 @@ struct test_app : public app {
 				auto pdtv = diffuse_texture_views.find(mesh->mMaterialIndex);
 				if (pdtv != diffuse_texture_views.end()) tv = pdtv->second.get();
 				objects.push_back({ vertices, indices, conv(node->mTransformation), tv, 
-					renderer::material(vec3(1.f), 0.05f, 0.02f) });
+					renderer::material(vec3(1.f), .9f, 0.12f) });
 			}
 		}
 		{

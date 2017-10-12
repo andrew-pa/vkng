@@ -131,11 +131,13 @@ namespace vkng
 		icfo.ppEnabledLayerNames = layer_names.data();
 		instance = vk::createInstance(icfo);
 
+#ifdef DEBUG
 		CreateDebugReportCallbackEXT((VkInstance)instance, (VkDebugReportCallbackCreateInfoEXT*)&vk::DebugReportCallbackCreateInfoEXT{
 			vk::DebugReportFlagBitsEXT::eError | vk::DebugReportFlagBitsEXT::eDebug | vk::DebugReportFlagBitsEXT::ePerformanceWarning | vk::DebugReportFlagBitsEXT::eWarning,
 			debugCallback
 		}, nullptr, &report_callback);
-		
+#endif
+
 
 		VkSurfaceKHR sf;
 		auto res = glfwCreateWindowSurface((VkInstance)instance,
@@ -170,7 +172,9 @@ namespace vkng
 	app::~app()
 	{
 		vkDestroySurfaceKHR((VkInstance)instance, (VkSurfaceKHR)surface, nullptr);
+#ifdef DEBUG
 		DestroyDebugReportCallbackEXT((VkInstance)instance, report_callback, nullptr);
+#endif
 		instance.destroy();
 		glfwDestroyWindow(wnd);
 		glfwTerminate();

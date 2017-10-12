@@ -1,18 +1,8 @@
 #version 450
 #extension GL_ARB_separate_shader_objects : enable
 
-float hash( const float n ) {
-	return fract(sin(n)*43758.54554213);
-}
-vec2 hash2( const float n ) {
-	return fract(sin(vec2(n,n+1.))*vec2(43758.5453123));
-}
-vec2 hash2( const vec2 n ) {
-	return fract(sin(vec2( n.x*n.y, n.x+n.y))*vec2(25.1459123,312.3490423));
-}
-vec3 hash3( const vec2 n ) {
-	return fract(sin(vec3(n.x, n.y, n+2.0))*vec3(36.5453123,43.1459123,11234.3490423));
-}
+#include "hash.h"
+
 vec3 chs( const vec3 n, const vec2 rv2 ) {
 	vec3  uu = normalize( cross( n, vec3(0.0,1.0,1.0) ) );
 	vec3  vv = cross( uu, n );
@@ -40,7 +30,7 @@ float distribution_ggx(in float ndh, in float alpha2) {
 	return alpha2 / (PI * (1.0 + ndh*ndh*(alpha2 - 1.0))*2.0);
 }
 
-#define saturate(v) clamp(v, 0.01, 1.01)
+#define saturate(v) clamp(v, 0.0, 1.0)
 
 vec3 brdf(in vec3 base_color, in float roughness, in float metallic, in samplerCube env, in vec3 L, in vec3 Lcolor, in vec3 N, in vec3 V) {
 	const vec3 H = normalize(V+L);
@@ -52,10 +42,10 @@ vec3 brdf(in vec3 base_color, in float roughness, in float metallic, in samplerC
 
 	const float alpha2 = roughness*roughness;
 	float D = distribution_ggx(ndh, alpha2), F = fresnel_schlick(vdh, metallic), G = saturate(geometry_ggx(ldh, alpha2)*geometry_ggx(vdh, alpha2));
-	float spec = F*G*vdh / (ndh*ndv); //D*F*G / (4.0 * ndl * ndv);
-	vec3 Kdiff = base_color;///PI;
+	float spec = F*G*vdh / (ndh*ndv); // D*F*G / (4.0 * ndl * ndv);
+	vec3 Kdiff = base_color/PI;
 	vec3 Kspec = spec*Lcolor;
-	return Kdiff; //mix(Kdiff + Kspec, Kspec*base_color, smoothstep(0.2, 0.45, metallic));
+	return Kdiff;//mix(Kdiff + Kspec, Kspec*base_color, smoothstep(0.2, 0.45, metallic));
 }
 //#include <shade.h>
 
@@ -66,10 +56,22 @@ layout(location = 0) out vec4 outColor;
 layout(binding = 0) uniform sampler2D gbuffer[4];
 layout(binding = 1) uniform samplerCube env;
 
+vec3 importance_sample_ggx(vec2 Xi, float roughness, vec3 N) {
+	float a = roughness*roughness;
+	float phi = 2.0 * PI * Xi.x;
+	float costheta = sqrt((1.0 - Xi.y) / (1.0+(a*a - 1) * Xi.y));
+	float sintheta = sqrt(1.0 - costheta*costheta);
+	vec3 H = vec3(sintheta * cos(phi), sintheta * sin(phi), costheta);
+	vec3 up = abs(N.z) < 0.999 ? vec3(0,0,1) : vec3(1,0,0);
+	vec3 tx = normalize(cross(up, N));
+	vec3 ty = cross(N, tx);
+	return tx * H.x + ty * H.y + N * H.z;
+}
+
 
 void main() {
 	vec4 norm_exist = texture(gbuffer[1], texCoord);
-	vec3 texc = texture(gbuffer[2], texCoord).xyz;
+	vec3 base_color = texture(gbuffer[2], texCoord).xyz;
 	if(norm_exist.w < 1.) {
 		discard;
 	}
@@ -78,13 +80,29 @@ void main() {
 	const vec3 V = vec3(0., 0., 1.); // we're in view space already
 
 	// calculate reflected light by integrating
-	vec3 col = vec3(0.);
-	for(int i = 0; i < 16; ++i) {
-		vec3 L = chs(-N, hash2(hash2(texCoord) + float(i)*24.0) );
-		vec3 Lc =  textureLod(env, -L, 3.0).xyz*100.0;
-		col += Lc * brdf(texc, mat.x, mat.y, env, L, Lc, N, V) * saturate(dot(N, L));
+	vec3 Kd = vec3(0.), Ks = vec3(0.);
+	/*for(int i = 0; i < 8; ++i) {
+		vec3 L = chs(N, hash23(vec3(texCoord, float(i)*6.0)));
+		vec3 Lc =  textureLod(env, L, 5.0).xyz;
+		Kd += base_color/PI * saturate(dot(N, L));
 	}
+	Kd /= 8.;*/
+	Kd = base_color/PI;
+	for(int i = 0; i < 64; ++i) {
+		vec3 H = importance_sample_ggx(hash23(vec3(texCoord, float(i)*6.0)), mat.x*mat.x, N);
+		vec3 L = 2.0 * dot(V, H) * H - V;
+		float ndl = saturate(dot(N, L));
+		if(ndl > 0) {
+			float ndv = saturate(dot(N, V));
+			float ndh = saturate(dot(N, H));
+			float vdh = saturate(dot(V, H));
+			vec3 Lc = textureLod(env, L, 0.0).xyz;
+			float G = saturate(geometry_ggx(ndv, mat.x)*geometry_ggx(ndl, mat.x));
+			float F = fresnel_schlick(vdh, .9);
+			Ks += Lc * F * G * vdh / (ndh * ndv);
+		}
+	}
+	Ks /= 64.;
 	
-
-	outColor = vec4(col / 16., 1.);
+	outColor = vec4(mix(Kd + Ks, Ks*base_color, smoothstep(0.2, 0.45, mat.y)), 1.);
 }

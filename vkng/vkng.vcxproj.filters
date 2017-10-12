@@ -74,6 +74,9 @@
     <ClInclude Include="shade.h">
       <Filter>Shaders</Filter>
     </ClInclude>
+    <ClInclude Include="hash.h">
+      <Filter>Shaders</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <CustomBuild Include="shader.frag">

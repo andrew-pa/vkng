@@ -54,6 +54,7 @@ namespace vkng {
 			mouse_disabled = !mouse_disabled;
 			if (glfwGetInputMode(_app->wnd, GLFW_CURSOR) == GLFW_CURSOR_DISABLED)
 				glfwSetInputMode(_app->wnd, GLFW_CURSOR, normal_cursor_mode);
+			cam_rot_v = vec2(0.f);
 		}
 		if (key == GLFW_KEY_F2 && action == input_action::release) {
 			cam.look_at(vec3(0.f, 2.f, 5.f), vec3(0.f, 0.f, 0.f), vec3(0.f, 1.f, 0.f));
@@ -75,11 +76,11 @@ namespace vkng {
 			else if (key == GLFW_KEY_UP)
 				cam_rot_v.y = -1;
 			else if (key == GLFW_KEY_DOWN)
-				cam_rot_v.y = -1;
+				cam_rot_v.y = 1;
 			else if (key == GLFW_KEY_LEFT)
 				cam_rot_v.x = -1;
 			else if (key == GLFW_KEY_RIGHT)
-				cam_rot_v.x = -1;
+				cam_rot_v.x = 1;
 		}
 		else if (action == key_action::release)
 		{
@@ -112,7 +113,7 @@ namespace vkng {
 		cam.move_up(cam_pos_v.z*dt*linear_speed.z);
 		cam.transform(rotate(mat4(1), cam_rot_v.x*dt*rotational_speed.x, vec3(0.f, 1.f, 0.f)));
 		cam.pitch(cam_rot_v.y*dt*rotational_speed.y);
-		cam_rot_v = vec2(0.f);
+		if(!mouse_disabled) cam_rot_v = vec2(0.f);
 		cam.update_view();
 	}
 }
