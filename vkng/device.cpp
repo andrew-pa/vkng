@@ -131,7 +131,7 @@ namespace vkng {
 				vk::ComponentMapping(), iv_sr));
 		}
 	}
-	void image::generate_mipmaps(size_t w, size_t h, vk::CommandBuffer cb, size_t layer_count) {
+	void image::generate_mipmaps(size_t w, size_t h, vk::CommandBuffer cb, size_t layer_count,  vk::ImageLayout final_layout) {
 		auto subresrange = vk::ImageSubresourceRange{ vk::ImageAspectFlagBits::eColor, 0,1,0,layer_count };
 		// transition the biggest mipmap (the loaded src image) so that it can be copied from
 		cb.pipelineBarrier(vk::PipelineStageFlagBits::eTransfer, vk::PipelineStageFlagBits::eTransfer, vk::DependencyFlags(), {}, {}, {
@@ -167,11 +167,11 @@ namespace vkng {
 			cb.blitImage(vk::Image(img), vk::ImageLayout::eTransferSrcOptimal, vk::Image(img), vk::ImageLayout::eTransferDstOptimal,
 				{ region }, vk::Filter::eLinear);
 
-			// transition the last mip level to shader read as we don't need it anymore
+			// transition the last mip level to the final layout as we don't need it anymore
 			subresrange.baseMipLevel = i - 1;
 			cb.pipelineBarrier(vk::PipelineStageFlagBits::eTransfer, vk::PipelineStageFlagBits::eFragmentShader, vk::DependencyFlags(), {}, {}, {
-					vk::ImageMemoryBarrier{vk::AccessFlagBits::eTransferWrite, vk::AccessFlagBits::eShaderRead,
-						vk::ImageLayout::eTransferDstOptimal, vk::ImageLayout::eShaderReadOnlyOptimal,
+					vk::ImageMemoryBarrier{vk::AccessFlagBits::eTransferRead, vk::AccessFlagBits::eShaderRead,
+						vk::ImageLayout::eTransferSrcOptimal, final_layout,
 						VK_QUEUE_FAMILY_IGNORED, VK_QUEUE_FAMILY_IGNORED, vk::Image(img), subresrange}
 			});
 
@@ -185,10 +185,10 @@ namespace vkng {
 				});
 			}
 			else {
-				// transtion this mip level to shader read mode as it's the last mip level
+				// transtion this mip level to the final layout as it's the last mip level
 				cb.pipelineBarrier(vk::PipelineStageFlagBits::eTransfer, vk::PipelineStageFlagBits::eFragmentShader, vk::DependencyFlags(), {}, {}, {
 						vk::ImageMemoryBarrier{vk::AccessFlagBits::eTransferWrite, vk::AccessFlagBits::eShaderRead,
-						vk::ImageLayout::eTransferDstOptimal, vk::ImageLayout::eShaderReadOnlyOptimal,
+						vk::ImageLayout::eTransferDstOptimal, final_layout,
 							VK_QUEUE_FAMILY_IGNORED, VK_QUEUE_FAMILY_IGNORED, vk::Image(img), subresrange}
 				});
 			}
