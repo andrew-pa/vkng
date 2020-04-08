@@ -54,13 +54,15 @@ namespace vkng {
 	protected:
 		vec3 cam_pos_v; vec2 cam_rot_v; vec2 tot_cam_rot;
 	public:
-		perspective_camera& cam;
+		perspective_camera* cam;
 		vec3 linear_speed;
 		vec2 rotational_speed;
 		bool mouse_disabled;
 		uint normal_cursor_mode;
-		fps_camera_controller(perspective_camera& c, vec3 lin_speed = vec3(7.f, 10.f, 5.f), vec2 rot_speed = vec2(1.f))
-			: cam(c), linear_speed(lin_speed), rotational_speed(rot_speed), mouse_disabled(false), normal_cursor_mode(GLFW_CURSOR_NORMAL) {
+		fps_camera_controller(perspective_camera* c, vec3 lin_speed = vec3(7.f, 10.f, 5.f), vec2 rot_speed = vec2(1.f))
+			: cam(c), linear_speed(lin_speed), rotational_speed(rot_speed),
+				mouse_disabled(false), normal_cursor_mode(GLFW_CURSOR_NORMAL),
+				cam_pos_v(0.f), cam_rot_v(0.f), tot_cam_rot(0.f) {
 		}
 
 		virtual void key_handler(app* _app, uint key, input_action action, input_mod mods);

@@ -10,13 +10,13 @@ namespace vkng {
 		auto devices = app->instance.enumeratePhysicalDevices(); // just choose the first physical device for now
 		pdevice = devices[0];
 		auto pdevice_props = pdevice.getProperties();
-		cout << "Physical Device: " << pdevice_props.deviceName << endl;
+		std::cout << "Physical Device: " << pdevice_props.deviceName << std::endl;
 		qu_fam = queue_families(pdevice, app);
 		assert(qu_fam.complete());
 		
 		vk::DeviceCreateInfo dcfo;
-		vector<vk::DeviceQueueCreateInfo> qu_cfo;
-		auto unique_qufam = set<int> { qu_fam.graphics, qu_fam.present };
+		std::vector<vk::DeviceQueueCreateInfo> qu_cfo;
+		auto unique_qufam = std::set<int> { qu_fam.graphics, qu_fam.present };
 		float fp = 1.f;
 		for (int qf : unique_qufam) {
 			qu_cfo.push_back(vk::DeviceQueueCreateInfo{
@@ -30,14 +30,14 @@ namespace vkng {
 		vk::PhysicalDeviceFeatures devfeat;
 		devfeat.samplerAnisotropy = VK_TRUE;
 		dcfo.pEnabledFeatures = &devfeat;
-		vector<const char*> layer_names{
+		std::vector<const char*> layer_names{
 #ifdef DEBUG
 			"VK_LAYER_LUNARG_standard_validation",
 #endif
 		};
 		dcfo.enabledLayerCount = layer_names.size();
 		dcfo.ppEnabledLayerNames = layer_names.data();
-		vector<const char*> ext = {
+		std::vector<const char*> ext = {
 			VK_KHR_SWAPCHAIN_EXTENSION_NAME
 		};
 		dcfo.enabledExtensionCount = ext.size();
@@ -55,7 +55,7 @@ namespace vkng {
 		vmaCreateAllocator(&cfo, &allocator);
 	}
 
-	vector<vk::UniqueCommandBuffer> device::alloc_cmd_buffers(size_t num, vk::CommandBufferLevel lvl) {
+	std::vector<vk::UniqueCommandBuffer> device::alloc_cmd_buffers(size_t num, vk::CommandBufferLevel lvl) {
 		vk::CommandBufferAllocateInfo afo;
 		afo.level = lvl;
 		afo.commandPool = cmdpool.get();
@@ -63,8 +63,8 @@ namespace vkng {
 		return dev->allocateCommandBuffersUnique(afo);
 	}
 
-	vk::UniqueDescriptorSetLayout device::create_desc_set_layout(vector<vk::DescriptorSetLayoutBinding> bindings) {
-		return dev->createDescriptorSetLayoutUnique(vk::DescriptorSetLayoutCreateInfo{ vk::DescriptorSetLayoutCreateFlags(), bindings.size(), bindings.data() });
+	vk::UniqueDescriptorSetLayout device::create_desc_set_layout(std::vector<vk::DescriptorSetLayoutBinding> bindings) {
+		return dev->createDescriptorSetLayoutUnique(vk::DescriptorSetLayoutCreateInfo{ vk::DescriptorSetLayoutCreateFlags(), (uint32_t)bindings.size(), bindings.data() });
 	}
 
 	device::~device() {
@@ -86,7 +86,7 @@ namespace vkng {
 	}
 	
 	buffer::buffer(device* dev, vk::DeviceSize size, vk::BufferUsageFlags bufuse,
-			vk::MemoryPropertyFlags memuse, optional<void**> persistent_map) : dev(dev)
+			vk::MemoryPropertyFlags memuse, std::optional<void**> persistent_map) : dev(dev)
 	{
 		VmaMemoryRequirements mreq = {};
 		mreq.flags = persistent_map ? VMA_MEMORY_REQUIREMENT_PERSISTENT_MAP_BIT : 0;
@@ -115,8 +115,8 @@ namespace vkng {
 
 	image::image(device * dev, vk::ImageCreateFlags flg, vk::ImageType type, vk::Extent3D size,
 			vk::Format fmt, vk::ImageTiling til, vk::ImageUsageFlags use, vk::MemoryPropertyFlags memuse,
-			size_t mip_count, size_t array_layers,
-			optional<vk::UniqueImageView*> iv, vk::ImageViewType iv_type, vk::ImageSubresourceRange iv_sr) :dev(dev) {
+			uint32_t mip_count, uint32_t array_layers,
+			std::optional<vk::UniqueImageView*> iv, vk::ImageViewType iv_type, vk::ImageSubresourceRange iv_sr) :dev(dev) {
 		VmaMemoryRequirements mreq = {};
 		mreq.requiredFlags = (VkMemoryPropertyFlags)memuse;
 		VmaAllocationInfo alli;
@@ -131,7 +131,7 @@ namespace vkng {
 				vk::ComponentMapping(), iv_sr));
 		}
 	}
-	void image::generate_mipmaps(size_t w, size_t h, vk::CommandBuffer cb, size_t layer_count,  vk::ImageLayout final_layout) {
+	void image::generate_mipmaps(size_t w, size_t h, vk::CommandBuffer cb, uint32_t layer_count,  vk::ImageLayout final_layout) {
 		auto subresrange = vk::ImageSubresourceRange{ vk::ImageAspectFlagBits::eColor, 0,1,0,layer_count };
 		// transition the biggest mipmap (the loaded src image) so that it can be copied from
 		cb.pipelineBarrier(vk::PipelineStageFlagBits::eTransfer, vk::PipelineStageFlagBits::eTransfer, vk::DependencyFlags(), {}, {}, {
@@ -156,11 +156,11 @@ namespace vkng {
 		for (size_t i = 1; i < count; ++i) {
 			region.srcSubresource.mipLevel = i - 1;
 			region.dstSubresource.mipLevel = i;
-			region.srcOffsets[1].x = glm::max(w >> (i - 1), 1u);
-			region.srcOffsets[1].y = glm::max(h >> (i - 1), 1u);
+			region.srcOffsets[1].x = glm::max(w >> (i - 1), (size_t)1);
+			region.srcOffsets[1].y = glm::max(h >> (i - 1), (size_t)1);
 			region.srcOffsets[1].z = 1;
-			region.dstOffsets[1].x = glm::max(w >> i, 1u);
-			region.dstOffsets[1].y = glm::max(h >> i, 1u);
+			region.dstOffsets[1].x = glm::max(w >> i, (size_t)1);
+			region.dstOffsets[1].y = glm::max(h >> i, (size_t)1);
 			region.dstOffsets[1].z = 1;
 
 			// copy the last mip level to the next mip level while filtering

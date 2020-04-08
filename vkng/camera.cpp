@@ -57,7 +57,7 @@ namespace vkng {
 			cam_rot_v = vec2(0.f);
 		}
 		if (key == GLFW_KEY_F2 && action == input_action::release) {
-			cam.look_at(vec3(0.f, 2.f, 5.f), vec3(0.f, 0.f, 0.f), vec3(0.f, 1.f, 0.f));
+			cam->look_at(vec3(0.f, 2.f, 5.f), vec3(0.f, 0.f, 0.f), vec3(0.f, 1.f, 0.f));
 		}
 		if (action == key_action::press)
 		{
@@ -108,12 +108,12 @@ namespace vkng {
 		}
 	}
 	void fps_camera_controller::update(float t, float dt) {
-		cam.fwd(cam_pos_v.x*dt*linear_speed.x);
-		cam.straft(cam_pos_v.y*dt*linear_speed.y);
-		cam.move_up(cam_pos_v.z*dt*linear_speed.z);
-		cam.transform(rotate(mat4(1), cam_rot_v.x*dt*rotational_speed.x, vec3(0.f, 1.f, 0.f)));
-		cam.pitch(cam_rot_v.y*dt*rotational_speed.y);
+		cam->fwd(cam_pos_v.x*dt*linear_speed.x);
+		cam->straft(cam_pos_v.y*dt*linear_speed.y);
+		cam->move_up(cam_pos_v.z*dt*linear_speed.z);
+		cam->transform(rotate(mat4(1), cam_rot_v.x*dt*rotational_speed.x, vec3(0.f, 1.f, 0.f)));
+		cam->pitch(cam_rot_v.y*dt*rotational_speed.y);
 		if(!mouse_disabled) cam_rot_v = vec2(0.f);
-		cam.update_view();
+		cam->update_view();
 	}
 }

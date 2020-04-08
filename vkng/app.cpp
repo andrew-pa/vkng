@@ -37,12 +37,12 @@ static VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(
 namespace vkng
 {
 	
-	app::app(const string& title, vec2 winsize)
+	app::app(const std::string& title, vec2 winsize)
 	{
-		if (!glfwInit()) throw runtime_error("GLFW init failed!");
+		if (!glfwInit()) throw std::runtime_error("GLFW init failed!");
 		glfwSetErrorCallback([](int ec, const char* em) {
 			char s[64]; sprintf_s(s, 64, "GLFW error: %s, (error code: %08X)", em, ec);
-			throw runtime_error(s);
+			throw std::runtime_error(s);
 		});
 
 		glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
@@ -51,7 +51,7 @@ namespace vkng
 		if(!wnd)
 		{
 			glfwTerminate();
-			throw runtime_error("GLFW window creation failed");
+			throw std::runtime_error("GLFW window creation failed");
 		}
 	
 		glfwSetWindowUserPointer(wnd, this);
@@ -116,13 +116,13 @@ namespace vkng
 		uint glfw_ext_cnt = 0;
 		const char** glfw_ext;
 		glfw_ext = glfwGetRequiredInstanceExtensions(&glfw_ext_cnt);
-		vector<const char*> extentions(glfw_ext, glfw_ext+glfw_ext_cnt);
+		std::vector<const char*> extentions(glfw_ext, glfw_ext+glfw_ext_cnt);
 #ifdef DEBUG
 		extentions.push_back(VK_EXT_DEBUG_REPORT_EXTENSION_NAME);
 #endif
 		icfo.enabledExtensionCount = extentions.size();
 		icfo.ppEnabledExtensionNames = extentions.data();
-		vector<const char*> layer_names{
+		std::vector<const char*> layer_names{
 #ifdef DEBUG
 			"VK_LAYER_LUNARG_standard_validation"
 #endif

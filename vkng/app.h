@@ -49,7 +49,7 @@ namespace vkng
 		VkDebugReportCallbackEXT report_callback;
 #endif
 
-		app(const string& title, vec2 winsize);
+		app(const std::string& title, vec2 winsize);
 		~app();
 
 		void run(bool print_debug_fps = true);
@@ -66,6 +66,6 @@ namespace vkng
 			return wh;
 		}
 
-		vector<input_handler*> input_handlers; //~app does not delete these!
+		std::vector<input_handler*> input_handlers; //~app does not delete these!
 	};
 }

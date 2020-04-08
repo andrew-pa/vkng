@@ -10,7 +10,7 @@ namespace vkng {
 		VmaAllocation alloc;
 		buffer() {}
 		buffer(device* dev, vk::DeviceSize size, vk::BufferUsageFlags bufuse, vk::MemoryPropertyFlags memuse, 
-			optional<void**> persistant_map = {});
+			std::optional<void**> persistant_map = {});
 
 		operator vk::Buffer() {
 			return vk::Buffer(buf);
@@ -26,16 +26,16 @@ namespace vkng {
 		VkImage img;
 		VmaAllocation alloc;
 		image(device* dev, vk::ImageCreateFlags createflags, vk::ImageType type, vk::Extent3D size, vk::Format fmt,
-			vk::ImageTiling til, vk::ImageUsageFlags use, vk::MemoryPropertyFlags memuse, size_t mip_count, size_t array_layers,
-			optional<vk::UniqueImageView*> iv = {}, vk::ImageViewType iv_type = {}, vk::ImageSubresourceRange iv_sr = {});
+			vk::ImageTiling til, vk::ImageUsageFlags use, vk::MemoryPropertyFlags memuse, uint32_t mip_count, uint32_t array_layers,
+			std::optional<vk::UniqueImageView*> iv = {}, vk::ImageViewType iv_type = {}, vk::ImageSubresourceRange iv_sr = {});
 		image(device* dev, vk::ImageType type, vk::Extent3D size, vk::Format fmt,
 			vk::ImageTiling til, vk::ImageUsageFlags use, vk::MemoryPropertyFlags memuse,
-			optional<vk::UniqueImageView*> iv = {}, vk::ImageViewType iv_type = {}, vk::ImageSubresourceRange iv_sr = {})
+			std::optional<vk::UniqueImageView*> iv = {}, vk::ImageViewType iv_type = {}, vk::ImageSubresourceRange iv_sr = {})
 			: image(dev, vk::ImageCreateFlags(), type, size, fmt, til, use, memuse, 1, 1, iv, iv_type, iv_sr) {}
 
 
 		// Automatically generate mipmaps using the GPU
-		void generate_mipmaps(size_t w, size_t h, vk::CommandBuffer cb, size_t layer_count = 1,
+		void generate_mipmaps(size_t w, size_t h, vk::CommandBuffer cb, uint32_t layer_count = 1,
 			vk::ImageLayout final_layout = vk::ImageLayout::eShaderReadOnlyOptimal);
 
 		static inline size_t calculate_mipmap_count(size_t w, size_t h) {
@@ -70,9 +70,9 @@ namespace vkng {
 
 		device(app* app);
 
-		vector<vk::UniqueCommandBuffer> alloc_cmd_buffers(size_t num = 1, vk::CommandBufferLevel lvl = vk::CommandBufferLevel::ePrimary);
+		std::vector<vk::UniqueCommandBuffer> alloc_cmd_buffers(size_t num = 1, vk::CommandBufferLevel lvl = vk::CommandBufferLevel::ePrimary);
 
-		vk::UniqueDescriptorSetLayout create_desc_set_layout(vector<vk::DescriptorSetLayoutBinding> bindings);
+		vk::UniqueDescriptorSetLayout create_desc_set_layout(std::vector<vk::DescriptorSetLayoutBinding> bindings);
 
 		~device();
 	};

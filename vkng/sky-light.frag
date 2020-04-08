@@ -56,6 +56,11 @@ layout(location = 0) out vec4 outColor;
 layout(binding = 0) uniform sampler2D gbuffer[4];
 layout(binding = 1) uniform samplerCube env;
 
+layout(push_constant) uniform PushConstants {
+	mat4 view_inv;
+} pc;
+
+
 vec3 importance_sample_ggx(vec2 Xi, float roughness, vec3 N) {
 	float a = roughness*roughness;
 	float phi = 2.0 * PI * Xi.x;
@@ -81,28 +86,33 @@ void main() {
 
 	// calculate reflected light by integrating
 	vec3 Kd = vec3(0.), Ks = vec3(0.);
-	/*for(int i = 0; i < 8; ++i) {
+	#define NUM_DIFFUSE_SAMPLES 32
+	#define NUM_SPECULAR_SAMPLES 16
+	#define L_B 2.0
+	for(int i = 0; i < NUM_DIFFUSE_SAMPLES; ++i) {
 		vec3 L = chs(N, hash23(vec3(texCoord, float(i)*6.0)));
-		vec3 Lc =  textureLod(env, L, 5.0).xyz;
-		Kd += base_color/PI * saturate(dot(N, L));
+		vec3 Lc = textureLod(env, (pc.view_inv*vec4(L,0.0)).xyz, 7.0).xyz * L_B;
+		Kd += Lc * base_color/PI * saturate(dot(N, L));
 	}
-	Kd /= 8.;*/
-	Kd = base_color/PI;
-	for(int i = 0; i < 64; ++i) {
+	Kd /= float(NUM_DIFFUSE_SAMPLES);
+	//Kd = base_color/PI;
+	for(int i = 0; i < NUM_SPECULAR_SAMPLES; ++i) {
 		vec3 H = importance_sample_ggx(hash23(vec3(texCoord, float(i)*6.0)), mat.x*mat.x, N);
 		vec3 L = 2.0 * dot(V, H) * H - V;
 		float ndl = saturate(dot(N, L));
-		if(ndl > 0) {
+		if(ndl > 0.0) {
 			float ndv = saturate(dot(N, V));
 			float ndh = saturate(dot(N, H));
 			float vdh = saturate(dot(V, H));
-			vec3 Lc = textureLod(env, L, 0.0).xyz;
+			vec3 Lc = textureLod(env, (pc.view_inv*vec4(L,0.0)).xyz, 10.0).xyz * L_B;
 			float G = saturate(geometry_ggx(ndv, mat.x)*geometry_ggx(ndl, mat.x));
 			float F = fresnel_schlick(vdh, .9);
-			Ks += Lc * F * G * vdh / (ndh * ndv);
+			Ks += Lc * F * G * (vdh / ndh*ndv);// * F * G * vdh / (ndh * ndv);
 		}
 	}
-	Ks /= 64.;
+	Ks /= float(NUM_SPECULAR_SAMPLES);
 	
-	outColor = vec4(mix(Kd + Ks, Ks*base_color, smoothstep(0.2, 0.45, mat.y)), 1.);
+	//outColor = vec4(mix(Kd + Ks, Ks*base_color, smoothstep(0.2, 0.45, mat.y)), 1.);
+
+	outColor = vec4(Kd+Ks, 1.);
 }

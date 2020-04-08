@@ -9,7 +9,7 @@ namespace vkng {
 	/*
 	Renderer
 	draw objects
-	Objects consist of a model (vertices<p/n/t/t>,indices), optional<texture>, transform, material params
+	Objects consist of a model (vertices<p/n/t/t>,indices), std::optional<texture>, transform, material params
 	*/
 	namespace renderer {
 		struct vertex {
@@ -18,7 +18,7 @@ namespace vkng {
 			static vk::VertexInputBindingDescription binding_desc() {
 				return vk::VertexInputBindingDescription{ 0, sizeof(vertex) };
 			}
-			static array<vk::VertexInputAttributeDescription, 4> attrib_desc() {
+			static std::array<vk::VertexInputAttributeDescription, 4> attrib_desc() {
 				return {
 					vk::VertexInputAttributeDescription{0, 0, vk::Format::eR32G32B32Sfloat, offsetof(vertex, pos)},
 					vk::VertexInputAttributeDescription{1, 0, vk::Format::eR32G32B32Sfloat, offsetof(vertex, norm)},
@@ -36,8 +36,8 @@ namespace vkng {
 		};
 
 		struct object_desc {
-			vector<vertex> vertices;
-			vector<uint32> indices;
+			std::vector<vertex> vertices;
+			std::vector<uint32> indices;
 			mat4 transform;
 			vk::ImageView diffuse_texture;
 			material mat;
@@ -63,10 +63,10 @@ namespace vkng {
 			device* dev;
 			shader_cache* shc;
 
-			vector<unique_ptr<image>> gbuf_img;
-			unique_ptr<image> itrmd_img; // an intermediate buffer to hold the summed final colors of objects
+			std::vector<std::unique_ptr<image>> gbuf_img;
+			std::unique_ptr<image> itrmd_img; // an intermediate buffer to hold the summed final colors of objects
 
-			vector<vk::UniqueImageView> gbuf_imv;
+			std::vector<vk::UniqueImageView> gbuf_imv;
 			vk::UniqueImageView itrmd_imv;
 
 			vk::UniqueSampler fsmp, nsmp;
@@ -75,9 +75,9 @@ namespace vkng {
 			vk::UniqueDescriptorSetLayout obj_desc_layout, postprocess_desc_layout, light_desc_layout;
 			vk::DescriptorSet postprocess_desc, light_desc, skybox_desc;
 
-			unique_ptr<buffer> vxbuf, ixbuf, ubuf;
+			std::unique_ptr<buffer> vxbuf, ixbuf, ubuf;
 			void* ubuf_map;
-			vector<object> objects;
+			std::vector<object> objects;
 
 			vk::DeviceSize box_vertex_offset, box_index_offset;
 			
@@ -86,14 +86,14 @@ namespace vkng {
 
 			vk::UniqueRenderPass smp_rp;
 
-			vector<vk::UniqueCommandBuffer> cmd_bufs;
-			vector<vk::UniqueFramebuffer> fb;
+			std::vector<vk::UniqueCommandBuffer> cmd_bufs;
+			std::vector<vk::UniqueFramebuffer> fb;
 			vk::Extent2D extent;
 
 			camera* cam;
 
 			renderer(device* dev, swap_chain* swch, shader_cache* shc,
-				camera* cam, const vector<object_desc>& objects, vk::ImageView sky);
+				camera* cam, const std::vector<object_desc>& objects, vk::ImageView sky);
 
 			void reset();
 			void recreate(swap_chain*);

@@ -13,6 +13,8 @@ using namespace vkng;
 #include <assimp\scene.h>
 #include <assimp\postprocess.h>
 
+using namespace std;
+
 /*
 	PLAN
 	
@@ -37,7 +39,7 @@ using namespace vkng;
 		[4] Point Lights
 */
 
-void generate_torus(vec2 r, int div, function<void(vec3, vec3, vec3, vec2)> vertex, function<void(size_t)> index)
+void generate_torus(vec2 r, int div, std::function<void(vec3, vec3, vec3, vec2)> vertex, std::function<void(size_t)> index)
 {
 	int ring_count = div;
 	int stack_count = div;
@@ -86,7 +88,7 @@ void generate_torus(vec2 r, int div, function<void(vec3, vec3, vec3, vec2)> vert
 	}
 }
 
-void generate_sphere(float radius, uint slice_count, uint stack_count, function<void(vec3,vec3,vec3,vec2)> vertex, function<void(uint32_t)> index)
+void generate_sphere(float radius, uint slice_count, uint stack_count, std::function<void(vec3,vec3,vec3,vec2)> vertex, std::function<void(uint32_t)> index)
 {
 	vertex(vec3(0.f, radius, 0.f), vec3(0, 1, 0), vec3(1, 0, 0), vec2(0, 0));
 
@@ -157,14 +159,14 @@ inline mat4 conv(aiMatrix4x4 v) {
 
 struct test_app : public app {
 	device dev; swap_chain swp; shader_cache shc;
-	unique_ptr<renderer::renderer> rndr;
-	unique_ptr<image> tex;
+	std::unique_ptr<renderer::renderer> rndr;
+	std::unique_ptr<image> tex;
 	vk::UniqueImageView tex_view;
 
-	vector<unique_ptr<image>> diffuse_textures;
-	map<size_t, vk::UniqueImageView> diffuse_texture_views;
+	std::vector<std::unique_ptr<image>> diffuse_textures;
+	std::map<size_t, vk::UniqueImageView> diffuse_texture_views;
 
-	unique_ptr<image> sky;
+	std::unique_ptr<image> sky;
 	vk::UniqueImageView sky_view;
 
 	perspective_camera cam;
@@ -175,8 +177,8 @@ struct test_app : public app {
 		dev(this), swp(this, &dev),
 		shc(&dev),
 		cam(vec2(1280, 960), vec3(0.f, 5.f, 5.f), vec3(0.f), vec3(0.f, 1.f, 0.f),
-			pi<float>() / 3.f, 1.f, 3500.f),
-		ctrl(cam, vec3(100.f))
+			pi<float>() / 3.f, 1.f, 4500.f),
+		ctrl(&cam, vec3(100.f))
 	{
 
 		// load squid texture
@@ -196,7 +198,7 @@ struct test_app : public app {
 
 		auto cb = move(dev.alloc_cmd_buffers()[0]);
 		cb->begin(vk::CommandBufferBeginInfo{ vk::CommandBufferUsageFlagBits::eOneTimeSubmit });
-		cb->pipelineBarrier(vk::PipelineStageFlagBits::eTopOfPipe, vk::PipelineStageFlagBits::eTopOfPipe, vk::DependencyFlags(), {}, {}, {
+		cb->pipelineBarrier(vk::PipelineStageFlagBits::eTransfer, vk::PipelineStageFlagBits::eTransfer, vk::DependencyFlags(), {}, {}, {
 			vk::ImageMemoryBarrier{vk::AccessFlags(), vk::AccessFlagBits::eTransferWrite, vk::ImageLayout::eUndefined, vk::ImageLayout::eTransferDstOptimal,
 				VK_QUEUE_FAMILY_IGNORED, VK_QUEUE_FAMILY_IGNORED, tex->operator vk::Image(), subresrange}
 		});
@@ -205,7 +207,7 @@ struct test_app : public app {
 			vk::BufferImageCopy{0, 0, 0, vk::ImageSubresourceLayers{vk::ImageAspectFlagBits::eColor, 0, 0, 1}, {0,0,0}, {(uint32_t)w,(uint32_t)h,1}}
 		});
 
-		cb->pipelineBarrier(vk::PipelineStageFlagBits::eTopOfPipe, vk::PipelineStageFlagBits::eTopOfPipe, vk::DependencyFlags(), {}, {}, {
+		cb->pipelineBarrier(vk::PipelineStageFlagBits::eTransfer, vk::PipelineStageFlagBits::eFragmentShader, vk::DependencyFlags(), {}, {}, {
 			vk::ImageMemoryBarrier{vk::AccessFlagBits::eTransferWrite, vk::AccessFlagBits::eShaderRead, vk::ImageLayout::eTransferDstOptimal, vk::ImageLayout::eShaderReadOnlyOptimal,
 				VK_QUEUE_FAMILY_IGNORED, VK_QUEUE_FAMILY_IGNORED, tex->operator vk::Image(), subresrange}
 		});
@@ -223,7 +225,7 @@ struct test_app : public app {
 				vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
 			auto data = (char*)sky_staging->map();
 			vector<vk::BufferImageCopy> copy_descs;
-			for (size_t i = 0; i < img_data.size(); ++i) {
+			for (uint32_t i = 0; i < img_data.size(); ++i) {
 				memcpy(data + i*img_size, img_data[i], img_size);
 				copy_descs.push_back(vk::BufferImageCopy{ i*img_size, 0, 0, vk::ImageSubresourceLayers{vk::ImageAspectFlagBits::eColor, 0, i, 1},
 							{0,0,0}, {(uint32_t)w,(uint32_t)h,1} });
@@ -235,7 +237,7 @@ struct test_app : public app {
 				vk::MemoryPropertyFlagBits::eDeviceLocal, image::calculate_mipmap_count(w,h), 6,
 				&sky_view, vk::ImageViewType::eCube, subresrange);
 
-			cb->pipelineBarrier(vk::PipelineStageFlagBits::eTopOfPipe, vk::PipelineStageFlagBits::eTopOfPipe, vk::DependencyFlags(), {}, {}, {
+			cb->pipelineBarrier(vk::PipelineStageFlagBits::eTransfer, vk::PipelineStageFlagBits::eTransfer, vk::DependencyFlags(), {}, {}, {
 				vk::ImageMemoryBarrier{vk::AccessFlags(), vk::AccessFlagBits::eTransferWrite, vk::ImageLayout::eUndefined, vk::ImageLayout::eTransferDstOptimal,
 					VK_QUEUE_FAMILY_IGNORED, VK_QUEUE_FAMILY_IGNORED, sky->operator vk::Image(), subresrange}
 			});
@@ -248,6 +250,7 @@ struct test_app : public app {
 		// load scene
 		vector<renderer::object_desc> objects;
 
+#ifdef LOAD_MODEL
 		Assimp::Importer imp;
 		auto mesh_path = //string("C:\\Users\\andre\\Source\\vkng\\vkng\\");
 		string("C:\\Users\\andre\\Downloads\\3DModels\\sponza\\");
@@ -286,7 +289,7 @@ struct test_app : public app {
 					&view, vk::ImageViewType::e2D, subresrange));
 				auto& tx = diffuse_textures[diffuse_textures.size() - 1];
 
-				cb->pipelineBarrier(vk::PipelineStageFlagBits::eTopOfPipe, vk::PipelineStageFlagBits::eTopOfPipe, vk::DependencyFlags(), {}, {}, {
+				cb->pipelineBarrier(vk::PipelineStageFlagBits::eTransfer, vk::PipelineStageFlagBits::eTransfer, vk::DependencyFlags(), {}, {}, {
 					vk::ImageMemoryBarrier{vk::AccessFlags(), vk::AccessFlagBits::eTransferWrite, vk::ImageLayout::eUndefined, vk::ImageLayout::eTransferDstOptimal,
 						VK_QUEUE_FAMILY_IGNORED, VK_QUEUE_FAMILY_IGNORED, tx->operator vk::Image(), subresrange}
 				});
@@ -301,10 +304,12 @@ struct test_app : public app {
 				diffuse_texture_views[i] = move(view);
 			}
 		}
+#endif
 		cb->end();
 		dev.graphics_qu.submit({ vk::SubmitInfo{0, nullptr, nullptr, 1, &cb.get()} }, nullptr); // start actually copying stuff while we create everything else
 		cout << "textures loaded" << endl;
 
+#ifdef LOAD_MODEL
 		stack<aiNode*> nodes;
 		nodes.push(scene->mRootNode);
 		while (!nodes.empty()) {
@@ -332,10 +337,11 @@ struct test_app : public app {
 				vk::ImageView tv = tex_view.get();
 				auto pdtv = diffuse_texture_views.find(mesh->mMaterialIndex);
 				if (pdtv != diffuse_texture_views.end()) tv = pdtv->second.get();
-				objects.push_back({ vertices, indices, conv(node->mTransformation), tv, 
+				objects.push_back({ vertices, indices, scale(conv(node->mTransformation), vec3(0.1f)), tv, 
 					renderer::material(vec3(1.f), .9f, 0.12f) });
 			}
 		}
+#endif
 		{
 			vector<renderer::vertex> vertices;
 			vector<uint32> indices;
@@ -349,7 +355,7 @@ struct test_app : public app {
 					float x = (float)i / 12.f;
 					float y = (float)j / 12.f;
 					objects.push_back({ vertices, indices, translate(mat4(1), vec3(i*2.f, 5.f, j*2.f)),
-						tex_view.get(), renderer::material(vec3(1.f), smoothstep(0.05f, 1.f, x), smoothstep(0.02f, 0.99f, y)) });
+						tex_view.get(), renderer::material(vec3(0.1f), smoothstep(0.05f, 0.5f, x), smoothstep(0.02f, 0.99f, y)) });
 				}
 			}
 		}
@@ -384,7 +390,7 @@ struct test_app : public app {
 		vk::PipelineStageFlags wait_stages[] = { vk::PipelineStageFlagBits::eColorAttachmentOutput };
 		vk::SubmitInfo sfo{ 1, &swp.image_ava_sp.get(), wait_stages, 1, &cb, 
 								1, &swp.render_fin_sp.get() };
-		dev.graphics_qu.submit(sfo, VK_NULL_HANDLE);
+		dev.graphics_qu.submit(sfo, nullptr);
 		swp.present(img_idx);
 	
 	}

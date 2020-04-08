@@ -26,9 +26,12 @@ using namespace glm;
 #include <thread>
 #include <memory>
 #include <optional>
-using namespace std;
+// using namespace std;
 
 #include <vulkan\vulkan.hpp>
+
+#undef min
+#undef max
 
 template<typename T, typename E>
 class result {
@@ -39,12 +42,12 @@ public:
 	result(E e) : e(e), type(1) {}
 
 	operator T() {
-		if (type) throw runtime_error("tried to unwrap error result");
+		if (type) throw std::runtime_error("tried to unwrap error result");
 		return t;
 	}
 
 	inline T unwrap() {
-		if (type) throw runtime_error("tried to unwrap error result");
+		if (type) throw std::runtime_error("tried to unwrap error result");
 		return t;
 	}
 
@@ -52,20 +55,20 @@ public:
 	inline E err() { return e; }
 
 	template<typename U>
-	inline result<U,E> map(function<U(T)> f) {
+	inline result<U,E> map(std::function<U(T)> f) {
 		if (type) return result<U, E>(e);
 		else return result<U, E>(f(t));
 	}
 
 	template<typename G>
-	inline result<T, G> map_err(function<G(E)> f) {
+	inline result<T, G> map_err(std::function<G(E)> f) {
 		if (!type) return result<T, G>(t);
 		else return result<T, G>(f(e));
 	}
 };
 
 /*template<typename T>
-T generate_collect(size_t count, function<T::value_type(size_t)> f) {
+T generate_collect(size_t count, std::function<T::value_type(size_t)> f) {
 	auto c = T();
 	generate_n(c.begin(), count, f);
 	return c;

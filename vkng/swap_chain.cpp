@@ -3,7 +3,7 @@
 namespace vkng {
 	result<uint32_t, vk::Result> swap_chain::aquire_next() {
 		auto v = dev->dev->acquireNextImageKHR(sch.get(), 
-			std::numeric_limits<uint64_t>::max(), image_ava_sp.get(), VK_NULL_HANDLE);
+			std::numeric_limits<uint64_t>::max(), image_ava_sp.get(), vk::Fence(nullptr));
 		if (v.result != vk::Result::eSuccess)
 			return result<uint32_t, vk::Result>(v.result);
 		else
@@ -23,17 +23,17 @@ namespace vkng {
 		create(app);
 	}
 
-	vector<vk::UniqueFramebuffer> swap_chain::create_framebuffers(vk::RenderPass rnp, function<void(size_t, vector<vk::ImageView>&)> additional_image_views) {
-		vector<vk::UniqueFramebuffer> framebuffers(image_views.size());
+	std::vector<vk::UniqueFramebuffer> swap_chain::create_framebuffers(vk::RenderPass rnp, std::function<void(size_t, std::vector<vk::ImageView>&)> additional_image_views) {
+		std::vector<vk::UniqueFramebuffer> framebuffers(image_views.size());
 		for (size_t i = 0; i < image_views.size(); ++i) {
-			vector<vk::ImageView> att = {
+			std::vector<vk::ImageView> att = {
 				image_views[i].get(),
 				depth_view.get()
 			};
 			additional_image_views(i, att);
 			framebuffers[i] = dev->dev->createFramebufferUnique(vk::FramebufferCreateInfo{
 				vk::FramebufferCreateFlags(),
-				rnp, att.size(), att.data(),
+				rnp, (uint32_t)att.size(), att.data(),
 				extent.width, extent.height, 1});
 		}
 		return framebuffers;
@@ -79,17 +79,18 @@ namespace vkng {
 		sch = dev->dev->createSwapchainKHRUnique(cfo);
 
 		images = dev->dev->getSwapchainImagesKHR(sch.get());
-		depth_buf = make_unique<image>(dev, vk::ImageType::e2D, vk::Extent3D{ extent.width, extent.height, 1 }, vk::Format::eD32Sfloat, vk::ImageTiling::eOptimal,
+		depth_buf = std::make_unique<image>(dev, vk::ImageType::e2D, vk::Extent3D{ extent.width, extent.height, 1 }, vk::Format::eD32Sfloat, vk::ImageTiling::eOptimal,
 			vk::ImageUsageFlagBits::eDepthStencilAttachment, vk::MemoryPropertyFlagBits::eDeviceLocal);
-		auto tbf = move(dev->alloc_cmd_buffers()[0]);
-		tbf->begin(&vk::CommandBufferBeginInfo(vk::CommandBufferUsageFlagBits::eOneTimeSubmit));
+	/*	auto tbf = std::move(dev->alloc_cmd_buffers()[0]);
+		tbf->begin(vk::CommandBufferBeginInfo(vk::CommandBufferUsageFlagBits::eOneTimeSubmit));
 		auto subresrange = vk::ImageSubresourceRange{ vk::ImageAspectFlagBits::eDepth, 0,1,0,1 };
 		tbf->pipelineBarrier(vk::PipelineStageFlagBits::eTopOfPipe, vk::PipelineStageFlagBits::eTopOfPipe, vk::DependencyFlags(), {}, {}, {
-			vk::ImageMemoryBarrier{vk::AccessFlags(), vk::AccessFlagBits::eDepthStencilAttachmentRead|vk::AccessFlagBits::eDepthStencilAttachmentWrite, vk::ImageLayout::eUndefined, vk::ImageLayout::eDepthStencilAttachmentOptimal,
+			vk::ImageMemoryBarrier{vk::AccessFlags(), vk::AccessFlags(),
+				vk::ImageLayout::eUndefined, vk::ImageLayout::eDepthStencilAttachmentOptimal,
 				VK_QUEUE_FAMILY_IGNORED, VK_QUEUE_FAMILY_IGNORED, depth_buf->operator vk::Image(), subresrange}
 		});
 		tbf->end();
-		dev->graphics_qu.submit({ vk::SubmitInfo{0,nullptr,nullptr,1,&tbf.get()} }, nullptr);
+		dev->graphics_qu.submit({ vk::SubmitInfo{0,nullptr,nullptr,1,&tbf.get()} }, nullptr);*/
 		vk::ImageViewCreateInfo ivcfo;
 		ivcfo.viewType = vk::ImageViewType::e2D;
 		ivcfo.format = format;

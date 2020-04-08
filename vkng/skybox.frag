@@ -8,5 +8,5 @@ layout(location = 0) out vec4 outColor;
 layout(binding = 0) uniform samplerCube sky;
 
 void main() {
-	outColor = texture(sky, texCoord);
+	outColor = textureLod(sky, texCoord, 4.0);
 }

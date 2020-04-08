@@ -3,7 +3,7 @@
 namespace vkng {
 	namespace renderer {
 
-		void generate_cube(float width, float height, float depth, function<void(vec3, vec3, vec3, vec2)> vertex, function<void(size_t)> index) {
+		void generate_cube(float width, float height, float depth, std::function<void(vec3, vec3, vec3, vec2)> vertex, std::function<void(size_t)> index) {
 
 			float w2 = 0.5f*width;
 			float h2 = 0.5f*height;
@@ -66,7 +66,7 @@ namespace vkng {
 		}
 
 		renderer::renderer(device* dev, swap_chain* swch, shader_cache* shc, camera* cam,
-			const vector<object_desc>& od, vk::ImageView sky_view) : dev(dev), shc(shc), cam(cam)
+			const std::vector<object_desc>& od, vk::ImageView sky_view) : dev(dev), shc(shc), cam(cam)
 		{
 			objects.resize(od.size());
 
@@ -111,15 +111,15 @@ namespace vkng {
 			stg_buf.unmap();
 
 			// - create vertex/index buffers
-			vxbuf = make_unique<buffer>(dev, total_vertices,
+			vxbuf = std::make_unique<buffer>(dev, total_vertices,
 				vk::BufferUsageFlagBits::eVertexBuffer | vk::BufferUsageFlagBits::eTransferDst,
 				vk::MemoryPropertyFlagBits::eDeviceLocal);
-			ixbuf = make_unique<buffer>(dev, total_indices,
+			ixbuf = std::make_unique<buffer>(dev, total_indices,
 				vk::BufferUsageFlagBits::eIndexBuffer | vk::BufferUsageFlagBits::eTransferDst,
 				vk::MemoryPropertyFlagBits::eDeviceLocal);
 
 			// - create command buffer to copy from staging ⇒ vertex/index buffers
-			auto scb = move(dev->alloc_cmd_buffers()[0]);
+			auto scb = std::move(dev->alloc_cmd_buffers()[0]);
 			scb->begin(vk::CommandBufferBeginInfo{ vk::CommandBufferUsageFlagBits::eOneTimeSubmit });
 
 			scb->copyBuffer(stg_buf, vxbuf->operator vk::Buffer(), { vk::BufferCopy{0, 0, total_vertices } });
@@ -131,30 +131,32 @@ namespace vkng {
 			//create samplers
 			fsmp = dev->dev->createSamplerUnique(vk::SamplerCreateInfo{
 					vk::SamplerCreateFlags(), vk::Filter::eLinear, vk::Filter::eLinear, vk::SamplerMipmapMode::eLinear, vk::SamplerAddressMode::eRepeat,
-					vk::SamplerAddressMode::eRepeat, vk::SamplerAddressMode::eRepeat, 0.f, VK_TRUE, 16.f
+					vk::SamplerAddressMode::eRepeat, vk::SamplerAddressMode::eRepeat, 0.f, VK_TRUE, 16.f, VK_FALSE, vk::CompareOp::eNever, 0.f, 10.f
 			});
 			nsmp = dev->dev->createSamplerUnique(vk::SamplerCreateInfo{
 					vk::SamplerCreateFlags(), vk::Filter::eNearest, vk::Filter::eNearest, vk::SamplerMipmapMode::eNearest, vk::SamplerAddressMode::eRepeat,
-					vk::SamplerAddressMode::eRepeat, vk::SamplerAddressMode::eRepeat, 0.f, VK_FALSE, 0.f
+					vk::SamplerAddressMode::eRepeat, vk::SamplerAddressMode::eRepeat, 0.f, VK_FALSE, 0.f, VK_FALSE, vk::CompareOp::eNever, 0.f, 10.f
 			});
 
 			//create uniform buffer
 			vk::PhysicalDeviceProperties props;
 			dev->pdevice.getProperties(&props); // query for how close together we can put the buffers
-			auto ubuf_aligned_size = props.limits.minUniformBufferOffsetAlignment;
+			const auto ubuf_size = (sizeof(mat4) + sizeof(material));
+			const auto num_mins = ubuf_size % props.limits.minUniformBufferOffsetAlignment;
+			auto ubuf_aligned_size = ubuf_size + num_mins*props.limits.minUniformBufferOffsetAlignment;
 
-			ubuf = make_unique<buffer>(dev, ubuf_aligned_size*objects.size(), vk::BufferUsageFlagBits::eUniformBuffer,
+			ubuf = std::make_unique<buffer>(dev, ubuf_aligned_size*objects.size(), vk::BufferUsageFlagBits::eUniformBuffer,
 				vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
-				make_optional((void**)&ubuf_map));
+				std::make_optional((void**)&ubuf_map));
 
 			//create descriptor pools, layouts & sets 
 			// - pool
 			vk::DescriptorPoolSize pool_sizes[] = {
-				{ vk::DescriptorType::eUniformBuffer, objects.size()*2 },
-				{ vk::DescriptorType::eCombinedImageSampler, objects.size() },
+				{ vk::DescriptorType::eUniformBuffer, (uint32_t)objects.size()*2 },
+				{ vk::DescriptorType::eCombinedImageSampler, (uint32_t)objects.size() },
 			};
 			obj_desc_pool = dev->dev->createDescriptorPoolUnique(vk::DescriptorPoolCreateInfo{
-				vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet, objects.size(), 2, pool_sizes
+				vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet, (uint32_t)objects.size(), 2, pool_sizes
 			});
 			
 			pool_sizes[0] = { vk::DescriptorType::eCombinedImageSampler, gbuf_count+3 };
@@ -177,19 +179,19 @@ namespace vkng {
 			// we can reuse the postprocess_desc_layout for the skybox for now because they both have the same layout (just sampling one texture)
 
 			// - sets
-			vector<vk::DescriptorSetLayout> layouts(objects.size(), obj_desc_layout.get());
+			std::vector<vk::DescriptorSetLayout> layouts(objects.size(), obj_desc_layout.get());
 			auto sets = dev->dev->allocateDescriptorSetsUnique(vk::DescriptorSetAllocateInfo{
-				obj_desc_pool.get(), objects.size(), layouts.data()
+				obj_desc_pool.get(), (uint32_t)objects.size(), layouts.data()
 			});
-			vector<vk::DescriptorBufferInfo> ubuf_ifo(objects.size());
-			vector<vk::DescriptorImageInfo> dftx_ifo(objects.size());
-			vector<vk::WriteDescriptorSet> writes;
+			std::vector<vk::DescriptorBufferInfo> ubuf_ifo(objects.size());
+			std::vector<vk::DescriptorImageInfo> dftx_ifo(objects.size());
+			std::vector<vk::WriteDescriptorSet> writes;
 			for (size_t i = 0; i < objects.size(); ++i) {
 				objects[i].transform = (mat4*)(((char*)ubuf_map) + i*ubuf_aligned_size);
 				*objects[i].transform = od[i].transform;
 				objects[i].mat = (material*)(((char*)ubuf_map) + i*ubuf_aligned_size + sizeof(mat4));
 				*objects[i].mat = od[i].mat;
-				objects[i].descriptor_set = move(sets[i]);
+				objects[i].descriptor_set = std::move(sets[i]);
 				ubuf_ifo[i] = vk::DescriptorBufferInfo{ ubuf->operator vk::Buffer(), i*ubuf_aligned_size, sizeof(mat4)+sizeof(material) };
 				writes.push_back(vk::WriteDescriptorSet{ objects[i].descriptor_set.get(), 0, 0, 1,
 					vk::DescriptorType::eUniformBuffer, nullptr, &ubuf_ifo[i] });
@@ -198,7 +200,7 @@ namespace vkng {
 					vk::DescriptorType::eCombinedImageSampler, &dftx_ifo[i] });
 			}
 
-			layouts = vector<vk::DescriptorSetLayout>{ postprocess_desc_layout.get(), postprocess_desc_layout.get(), light_desc_layout.get() };
+			layouts = std::vector<vk::DescriptorSetLayout>{ postprocess_desc_layout.get(), postprocess_desc_layout.get(), light_desc_layout.get() };
 			auto aux_desc = dev->dev->allocateDescriptorSets(vk::DescriptorSetAllocateInfo{
 				aux_desc_pool.get(), 3, layouts.data()
 			});
@@ -215,17 +217,22 @@ namespace vkng {
 
 			dev->dev->updateDescriptorSets(writes, {});
 
+			auto view_proj_pcr = vk::PushConstantRange{ vk::ShaderStageFlagBits::eVertex, 0, sizeof(mat4) * 2 }; //push constant for view, proj
+			auto viewproj_pcr = vk::PushConstantRange{ vk::ShaderStageFlagBits::eVertex, 0, sizeof(mat4) }; //push constant for view, proj
+			auto viewinv_pcr = vk::PushConstantRange{ vk::ShaderStageFlagBits::eFragment, 0, sizeof(mat4) }; //push constant for view inverse
+
 			//create pipeline layouts
 			smp_pl_layout = dev->dev->createPipelineLayoutUnique(vk::PipelineLayoutCreateInfo{
 				vk::PipelineLayoutCreateFlags(), 1, &obj_desc_layout.get(),
-				1, &vk::PushConstantRange{vk::ShaderStageFlagBits::eVertex, 0, sizeof(mat4)*2} //push constant for view, proj
+				1, &view_proj_pcr
 			});
 			sky_light_pl_layout = dev->dev->createPipelineLayoutUnique(vk::PipelineLayoutCreateInfo{
 				vk::PipelineLayoutCreateFlags(), 1, &light_desc_layout.get(),
+				1, &viewinv_pcr
 			});
 			skybox_pl_layout = dev->dev->createPipelineLayoutUnique(vk::PipelineLayoutCreateInfo{
 				vk::PipelineLayoutCreateFlags(), 1, &postprocess_desc_layout.get(),
-				1, &vk::PushConstantRange(vk::ShaderStageFlagBits::eVertex, 0, sizeof(mat4)) //push constant for view_proj like above
+				1, &viewproj_pcr
 			});
 			postprocess_pl_layout = dev->dev->createPipelineLayoutUnique(vk::PipelineLayoutCreateInfo{
 				vk::PipelineLayoutCreateFlags(), 1, &postprocess_desc_layout.get(),
@@ -239,7 +246,7 @@ namespace vkng {
 		}
 		
 		void renderer::create_render_pass(swap_chain* swch) {
-			vector<vk::AttachmentDescription> attachments = {
+			std::vector<vk::AttachmentDescription> attachments = {
 					{ vk::AttachmentDescriptionFlags(), //swapchain color
 								swch->format, vk::SampleCountFlagBits::e1, vk::AttachmentLoadOp::eClear, vk::AttachmentStoreOp::eStore,
 								vk::AttachmentLoadOp::eDontCare, vk::AttachmentStoreOp::eDontCare,
@@ -256,21 +263,22 @@ namespace vkng {
 			attachments.push_back({ vk::AttachmentDescriptionFlags(), //intermediate buffer
 							vk::Format::eR32G32B32A32Sfloat, vk::SampleCountFlagBits::e1, vk::AttachmentLoadOp::eClear, vk::AttachmentStoreOp::eStore,
 							vk::AttachmentLoadOp::eDontCare, vk::AttachmentStoreOp::eDontCare,
-							vk::ImageLayout::eColorAttachmentOptimal, vk::ImageLayout::eColorAttachmentOptimal });
+							vk::ImageLayout::eUndefined, vk::ImageLayout::eColorAttachmentOptimal });
 			vk::AttachmentReference itrmd_write_ref{ 2, vk::ImageLayout::eColorAttachmentOptimal };
 			vk::AttachmentReference itrmd_read_ref{ 2, vk::ImageLayout::eShaderReadOnlyOptimal };
 
-			array<vk::AttachmentReference, gbuf_count> gbuf_write_ref, gbuf_read_ref;
+			std::array<vk::AttachmentReference, gbuf_count> gbuf_write_ref, gbuf_read_ref;
 			for (size_t i = 0; i < gbuf_count; ++i) {
 				attachments.push_back({ vk::AttachmentDescriptionFlags(), //gbuffer
 								vk::Format::eR32G32B32A32Sfloat, vk::SampleCountFlagBits::e1, vk::AttachmentLoadOp::eClear, vk::AttachmentStoreOp::eStore,
 								vk::AttachmentLoadOp::eDontCare, vk::AttachmentStoreOp::eDontCare,
-								vk::ImageLayout::eColorAttachmentOptimal, vk::ImageLayout::eColorAttachmentOptimal });
-				gbuf_write_ref[i] = vk::AttachmentReference{ attachments.size() - 1, vk::ImageLayout::eColorAttachmentOptimal };
-				gbuf_read_ref[i] = vk::AttachmentReference{ attachments.size() - 1, vk::ImageLayout::eShaderReadOnlyOptimal };
+								vk::ImageLayout::eUndefined, vk::ImageLayout::eColorAttachmentOptimal });
+				uint32_t attachment_idx = attachments.size() - 1;
+				gbuf_write_ref[i] = vk::AttachmentReference{ attachment_idx, vk::ImageLayout::eColorAttachmentOptimal };
+				gbuf_read_ref[i] = vk::AttachmentReference{ attachment_idx, vk::ImageLayout::eShaderReadOnlyOptimal };
 			}
 
-			vector<vk::SubpassDescription> subpasses = {
+			std::vector<vk::SubpassDescription> subpasses = {
 				// render into g-buffer
 				{ vk::SubpassDescriptionFlags(), vk::PipelineBindPoint::eGraphics, 0, nullptr, gbuf_count, gbuf_write_ref.data(), nullptr, &dep_ref },
 				// do lighting and write to itermediate buffer
@@ -278,19 +286,19 @@ namespace vkng {
 				// postprocess and write to backbuffer
 				{ vk::SubpassDescriptionFlags(), vk::PipelineBindPoint::eGraphics, 1, &itrmd_read_ref, 1, &col_ref, nullptr, nullptr }
 			};
-			vector<vk::SubpassDependency> dpnd = {
+			std::vector<vk::SubpassDependency> dpnd = {
 				// transition g-buffer to ColorAttachmentOutput from eShaderRead
 				{ VK_SUBPASS_EXTERNAL, 0, vk::PipelineStageFlagBits::eFragmentShader, vk::PipelineStageFlagBits::eColorAttachmentOutput,
 					vk::AccessFlagBits::eShaderRead, vk::AccessFlagBits::eColorAttachmentRead | vk::AccessFlagBits::eColorAttachmentWrite },
 				// transition g-buffer to eShaderRead from ColorAttachmentOutput
-				{ 0, 1, vk::PipelineStageFlagBits::eBottomOfPipe, vk::PipelineStageFlagBits::eFragmentShader,
+				{ 0, 1, vk::PipelineStageFlagBits::eColorAttachmentOutput, vk::PipelineStageFlagBits::eFragmentShader,
 					vk::AccessFlagBits::eColorAttachmentRead | vk::AccessFlagBits::eColorAttachmentWrite, vk::AccessFlagBits::eShaderRead },
 
 				// transition intermediate buffer to ColorAttachmentOutput from eShaderRead
 				{ 0, 1, vk::PipelineStageFlagBits::eFragmentShader, vk::PipelineStageFlagBits::eColorAttachmentOutput,
 					vk::AccessFlagBits::eShaderRead, vk::AccessFlagBits::eColorAttachmentRead | vk::AccessFlagBits::eColorAttachmentWrite },
 				// transition intermediate buffer to eShaderRead from ColorAttachmentOutput
-				{ 1, 2, vk::PipelineStageFlagBits::eBottomOfPipe, vk::PipelineStageFlagBits::eFragmentShader,
+				{ 1, 2, vk::PipelineStageFlagBits::eColorAttachmentOutput, vk::PipelineStageFlagBits::eFragmentShader,
 					vk::AccessFlagBits::eColorAttachmentRead | vk::AccessFlagBits::eColorAttachmentWrite, vk::AccessFlagBits::eShaderRead },
 
 				// transition backbuffer to ColorAttachmentOutput from ColorAttachmentRead
@@ -299,7 +307,7 @@ namespace vkng {
 			};
 
 			vk::RenderPassCreateInfo rpcfo{ vk::RenderPassCreateFlags(),
-				attachments.size(), attachments.data(), subpasses.size(), subpasses.data(), dpnd.size(), dpnd.data() };
+				(uint32_t)attachments.size(), attachments.data(), (uint32_t)subpasses.size(), subpasses.data(), (uint32_t)dpnd.size(), dpnd.data() };
 			smp_rp = dev->dev->createRenderPassUnique(rpcfo);
 		}
 
@@ -377,7 +385,7 @@ namespace vkng {
 			VkPipelineColorBlendAttachmentState colorBlendAttachment = {};
 			colorBlendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
 			colorBlendAttachment.blendEnable = VK_FALSE;
-			array<VkPipelineColorBlendAttachmentState, gbuf_count> blend_att_state;
+			std::array<VkPipelineColorBlendAttachmentState, gbuf_count> blend_att_state;
 			for (size_t i = 0; i < gbuf_count; ++i) blend_att_state[i] = colorBlendAttachment;
 
 			VkPipelineColorBlendStateCreateInfo colorBlending = {};
@@ -406,7 +414,7 @@ namespace vkng {
 			pipelineInfo.renderPass = (VkRenderPass)smp_rp.get();
 			pipelineInfo.subpass = 0;
 			pipelineInfo.basePipelineHandle = VK_NULL_HANDLE;
-			gbuf_pl = dev->dev->createGraphicsPipelineUnique(VK_NULL_HANDLE, pipelineInfo);
+			gbuf_pl = dev->dev->createGraphicsPipelineUnique(vk::PipelineCache(nullptr), pipelineInfo);
 
 			shaderStages[0].module = (VkShaderModule)shc->load_shader("skybox.vert.spv").unwrap();
 			shaderStages[1].module = (VkShaderModule)shc->load_shader("skybox.frag.spv").unwrap();
@@ -416,7 +424,7 @@ namespace vkng {
 			rasterizer.cullMode = VK_CULL_MODE_NONE;
 			pipelineInfo.subpass = 1;
 			pipelineInfo.layout = (VkPipelineLayout)skybox_pl_layout.get();
-			skybox_pl = dev->dev->createGraphicsPipelineUnique(VK_NULL_HANDLE, pipelineInfo);
+			skybox_pl = dev->dev->createGraphicsPipelineUnique(nullptr, pipelineInfo);
 
 			vertexInputInfo.vertexAttributeDescriptionCount = 0;
 			vertexInputInfo.vertexBindingDescriptionCount = 0;
@@ -432,7 +440,7 @@ namespace vkng {
 			rasterizer.cullMode = VK_CULL_MODE_NONE;
 			pipelineInfo.subpass = 1;
 			pipelineInfo.layout = (VkPipelineLayout)sky_light_pl_layout.get();
-			sky_light_pl = dev->dev->createGraphicsPipelineUnique(VK_NULL_HANDLE, pipelineInfo);
+			sky_light_pl = dev->dev->createGraphicsPipelineUnique(nullptr, pipelineInfo);
 
 			vertexInputInfo.vertexAttributeDescriptionCount = 0;
 			vertexInputInfo.vertexBindingDescriptionCount = 0;
@@ -445,7 +453,7 @@ namespace vkng {
 			rasterizer.cullMode = VK_CULL_MODE_NONE;
 			pipelineInfo.subpass = 2;
 			pipelineInfo.layout = (VkPipelineLayout)postprocess_pl_layout.get();
-			postprocess_pl = dev->dev->createGraphicsPipelineUnique(VK_NULL_HANDLE, pipelineInfo);
+			postprocess_pl = dev->dev->createGraphicsPipelineUnique(nullptr, pipelineInfo);
 		}
 
 		void renderer::create_framebuffers(swap_chain* swch) {
@@ -453,25 +461,26 @@ namespace vkng {
 			gbuf_imv.resize(gbuf_count);
 			for (size_t i = 0; i < gbuf_count; ++i) {
 				// create the images & image views
-				gbuf_img.push_back(make_unique<image>(
+				gbuf_img.push_back(std::make_unique<image>(
 					dev, vk::ImageType::e2D, vk::Extent3D{ extent.width, extent.height, 1 }, vk::Format::eR32G32B32A32Sfloat,
 					vk::ImageTiling::eOptimal, vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eInputAttachment,
 					vk::MemoryPropertyFlagBits::eDeviceLocal, &gbuf_imv[i], vk::ImageViewType::e2D,
 					vk::ImageSubresourceRange{ vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1 }
 				));
 			}
-			itrmd_img = make_unique<image>(
+			itrmd_img = std::make_unique<image>(
 				dev, vk::ImageType::e2D, vk::Extent3D{ extent.width, extent.height, 1 }, vk::Format::eR32G32B32A32Sfloat,
-				vk::ImageTiling::eOptimal, vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eInputAttachment,
+				vk::ImageTiling::eOptimal,
+				vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eInputAttachment,
 				vk::MemoryPropertyFlagBits::eDeviceLocal, &itrmd_imv, vk::ImageViewType::e2D,
 				vk::ImageSubresourceRange{ vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1 }
 			);
-			fb = swch->create_framebuffers(smp_rp.get(), [&](size_t, vector<vk::ImageView>& att) {
+			fb = swch->create_framebuffers(smp_rp.get(), [&](size_t, std::vector<vk::ImageView>& att) {
 				att.push_back(itrmd_imv.get());
 				for (const auto& iv : gbuf_imv) att.push_back(iv.get());
 			});
 
-			vector<vk::DescriptorImageInfo> gbuf_ifo;
+			std::vector<vk::DescriptorImageInfo> gbuf_ifo;
 			for (size_t i = 0; i < gbuf_count; ++i)
 				gbuf_ifo.push_back(vk::DescriptorImageInfo{ nsmp.get(), gbuf_imv[i].get(), vk::ImageLayout::eShaderReadOnlyOptimal });
 			vk::DescriptorImageInfo itrmd_ifo{ nsmp.get(), itrmd_imv.get(), vk::ImageLayout::eShaderReadOnlyOptimal };
@@ -506,17 +515,17 @@ namespace vkng {
 		vk::CommandBuffer renderer::render(uint32_t image_index) {
 			auto& cb = cmd_bufs[image_index];
 			cb->begin(vk::CommandBufferBeginInfo{ vk::CommandBufferUsageFlagBits::eOneTimeSubmit });
-			const vector<vk::ClearValue> cc = {
-				vk::ClearColorValue{ array<float,4>{0.1f, 0.1f, 0.1f, 1.f} },
+			const std::vector<vk::ClearValue> cc = {
+				vk::ClearColorValue{ std::array<float,4>{0.1f, 0.1f, 0.1f, 1.f} },
 				vk::ClearDepthStencilValue{1.f, 0},
-				vk::ClearColorValue{ array<float,4>{0.f, 0.f, 0.f, 0.f} },
-				vk::ClearColorValue{ array<float,4>{0.f, 0.f, 0.f, 0.f} },
-				vk::ClearColorValue{ array<float,4>{0.f, 0.f, 0.f, 0.f} },
-				vk::ClearColorValue{ array<float,4>{0.f, 0.f, 0.f, 0.f} },
-				vk::ClearColorValue{ array<float,4>{0.f, 0.f, 0.f, 0.f} },
+				vk::ClearColorValue{ std::array<float,4>{0.f, 0.f, 0.f, 0.f} },
+				vk::ClearColorValue{ std::array<float,4>{0.f, 0.f, 0.f, 0.f} },
+				vk::ClearColorValue{ std::array<float,4>{0.f, 0.f, 0.f, 0.f} },
+				vk::ClearColorValue{ std::array<float,4>{0.f, 0.f, 0.f, 0.f} },
+				vk::ClearColorValue{ std::array<float,4>{0.f, 0.f, 0.f, 0.f} },
 			};
 			auto rbio = vk::RenderPassBeginInfo{ smp_rp.get(), fb[image_index].get(),
-				vk::Rect2D(vk::Offset2D(), extent), cc.size(), cc.data() };
+				vk::Rect2D(vk::Offset2D(), extent), (uint32_t)cc.size(), cc.data() };
 			cb->beginRenderPass(rbio, vk::SubpassContents::eInline);
 
 			// - Draw Objects -
@@ -537,6 +546,7 @@ namespace vkng {
 
 			// calculate image-based lighting from sky
 			cb->bindPipeline(vk::PipelineBindPoint::eGraphics, sky_light_pl.get());
+			cb->pushConstants<mat4>(sky_light_pl_layout.get(), vk::ShaderStageFlagBits::eFragment, 0, { inverse(cam->_view) });
 			cb->bindDescriptorSets(vk::PipelineBindPoint::eGraphics, sky_light_pl_layout.get(), 0, { light_desc }, {});
 			cb->draw(3, 1, 0, 0);
 
